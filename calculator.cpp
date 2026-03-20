@@ -1,4 +1,5 @@
 #include "calculator.h"
+#include "Resource.h"
 #include <stdexcept>
 
 std::wstring const calculator::s_class_name{ L"window" };
@@ -9,6 +10,8 @@ bool calculator::register_class() {
 	desc.cbSize = sizeof(WNDCLASSEXW);
 	desc.lpfnWndProc = window_proc_static;
 	desc.hInstance = m_instance;
+	desc.hIcon = LoadIconW(m_instance, MAKEINTRESOURCE(IDI_ICON2));
+	desc.hIconSm = LoadCursorW(m_instance, MAKEINTRESOURCE(IDI_ICON2));
 	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 	desc.lpszClassName = s_class_name.c_str();
 	desc.hbrBackground = CreateSolidBrush(RGB(100, 100, 100));
