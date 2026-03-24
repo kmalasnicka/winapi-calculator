@@ -137,6 +137,7 @@
     <ResourceCompile Include="laby3_2.rc" />
   </ItemGroup>
   <ItemGroup>
+    <Image Include="calc.ico" />
     <Image Include="laby3_2.ico" />
     <Image Include="small.ico" />
   </ItemGroup>

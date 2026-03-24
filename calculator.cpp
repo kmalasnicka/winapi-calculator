@@ -10,11 +10,11 @@ bool calculator::register_class() {
 	desc.cbSize = sizeof(WNDCLASSEXW);
 	desc.lpfnWndProc = window_proc_static;
 	desc.hInstance = m_instance;
-	desc.hIcon = LoadIconW(m_instance, MAKEINTRESOURCE(IDI_ICON2));
-	desc.hIconSm = LoadCursorW(m_instance, MAKEINTRESOURCE(IDI_ICON2));
+	desc.hIcon = LoadIconW(m_instance, MAKEINTRESOURCE(IDI_CALC));
+	desc.hIconSm = LoadIconW(m_instance, MAKEINTRESOURCE(IDI_CALC));
 	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 	desc.lpszClassName = s_class_name.c_str();
-	desc.hbrBackground = CreateSolidBrush(RGB(100, 100, 100));
+	desc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1); //bialy kolor
 	return RegisterClassExW(&desc) != 0;
 }
 
@@ -24,12 +24,11 @@ HWND calculator::create_window()
 		0,
 		s_class_name.c_str(),
 		L"calculator",
-		WS_SYSMENU | WS_CAPTION |
-		WS_BORDER | WS_MINIMIZEBOX | WS_OVERLAPPEDWINDOW,
+		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0,
-		320, 400,
+		400, 500,
 		nullptr,
-		nullptr,
+		LoadMenuW(m_instance, MAKEINTRESOURCEW(IDC_LABY32)), //podpiecie menu do okna
 		m_instance,
 		this);
 }
@@ -72,13 +71,45 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		mmi->ptMinTrackSize.y = 400;
 		return 0;
 	}
+	case WM_COMMAND: //obsluga komend menu
+	{
+		switch (LOWORD(wparam))
+		{
+		case IDM_EXIT:
+			DestroyWindow(window);
+			return 0;
+
+		case IDM_ABOUT:
+			MessageBoxW(window, L"DevCalculator", L"About", MB_OK | MB_ICONINFORMATION);
+			return 0;
+
+		case IDM_EDIT_CLEAR:
+			MessageBoxW(window, L"Clear", L"Edit", MB_OK);
+			return 0;
+
+		case IDM_MODE_BASIC:
+			CheckMenuRadioItem(
+				GetMenu(window),
+				IDM_MODE_BASIC,
+				IDM_MODE_PROGRAMMER,
+				IDM_MODE_BASIC,
+				MF_BYCOMMAND);
+			return 0;
+
+		case IDM_MODE_PROGRAMMER:
+			MessageBoxW(window, L"Not implemented yet", L"Programmer mode", MB_OK | MB_ICONINFORMATION);
+			return 0;
+		}
+		return 0;
+	}
 	}
 	return DefWindowProcW(window, message, wparam, lparam);
 }
 
-calculator::calculator(HINSTANCE instance) : m_instance{ instance }, m_main{} {
+calculator::calculator(HINSTANCE instance) : m_instance{ instance }, m_main{}, m_accel{} {
 	register_class();
 	m_main = create_window();
+	m_accel = LoadAcceleratorsW(m_instance, MAKEINTRESOURCEW(IDC_LABY32)); //ladowanie tabeli akceleratorow
 }
 
 int calculator::run(int show_command)
@@ -89,8 +120,10 @@ int calculator::run(int show_command)
 	while ((result = GetMessageW(&msg, nullptr, 0, 0)) != 0)
 	{
 		if (result == -1) return EXIT_FAILURE;
-		TranslateMessage(&msg);
-		DispatchMessageW(&msg);
+		if (!TranslateAcceleratorW(m_main, m_accel, &msg)) {
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
 	}
 	return EXIT_SUCCESS;
 }

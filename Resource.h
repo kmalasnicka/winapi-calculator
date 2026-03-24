@@ -15,6 +15,10 @@
 #define IDC_MYICON				2
 #ifndef IDC_STATIC
 #define IDC_STATIC				-1
+#define IDI_CALC 129
+#define IDM_MODE_BASIC      32771
+#define IDM_MODE_PROGRAMMER 32772
+#define IDM_EDIT_CLEAR      32773
 #endif
 // Next default values for new objects
 //
