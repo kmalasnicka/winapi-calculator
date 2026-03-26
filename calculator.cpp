@@ -2,6 +2,27 @@
 #include "Resource.h"
 #include <stdexcept>
 
+enum ButtonIds { //identyfikatory przyciskow
+	ID_BTN_7 = 2001,
+	ID_BTN_8,
+	ID_BTN_9,
+	ID_BTN_DIV,
+	ID_BTN_4,
+	ID_BTN_5,
+	ID_BTN_6,
+	ID_BTN_MUL,
+	ID_BTN_1,
+	ID_BTN_2,
+	ID_BTN_3,
+	ID_BTN_SUB,
+	ID_BTN_C,
+	ID_BTN_0,
+	ID_BTN_DOT,
+	ID_BTN_ADD,
+	ID_BTN_BS,
+	ID_BTN_EQ
+};
+
 std::wstring const calculator::s_class_name{ L"window" };
 std::wstring const calculator::s_display_class_name{ L"calculator_display" };
 
@@ -74,16 +95,89 @@ void calculator::create_display(HWND parent) {
 	SetWindowLongPtrW(m_display, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
 }
 
+void calculator::create_buttons(HWND parent) {
+	const wchar_t* labels[18] = { //tekst na przyciskach
+		L"7", L"8", L"9", L"/",
+		L"4", L"5", L"6", L"*",
+		L"1", L"2", L"3", L"-",
+		L"C", L"0", L".", L"+",
+		L"BS", L"="
+	};
+
+	const int ids[18] = { //id przypisane do kazdego przycisku
+		ID_BTN_7, ID_BTN_8, ID_BTN_9, ID_BTN_DIV,
+		ID_BTN_4, ID_BTN_5, ID_BTN_6, ID_BTN_MUL,
+		ID_BTN_1, ID_BTN_2, ID_BTN_3, ID_BTN_SUB,
+		ID_BTN_C, ID_BTN_0, ID_BTN_DOT, ID_BTN_ADD,
+		ID_BTN_BS, ID_BTN_EQ
+	};
+
+	for (int i = 0; i < 18; i++) { //tworzymy 18 przyciskow
+		m_buttons[i] = CreateWindowW(
+			L"BUTTON", //typ kontrolki
+			labels[i], //tekst
+			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+			0, 0, 0, 0,
+			parent,
+			(HMENU)ids[i], //id
+			m_instance,
+			nullptr
+		);
+	}
+}
+
 void calculator::resize_children(int width, int height) {
-	const int padding = 5;
+	const int padding = 5; //odstep miedzy elementami
+	//display zajmuje 1/4 wysokosci
 	int display_x = padding;
 	int display_y = padding;
 	int display_w = width - 2 * padding;
-	int display_h = height / 4 - padding * 2;
-	if (display_h < 60) display_h = 60;
-	MoveWindow(m_display, display_x, display_y, display_w, display_h, TRUE);
-}
+	int display_h = height / 4;
 
+	if (display_h < 60) display_h = 60;
+
+	MoveWindow(m_display, display_x, display_y, display_w, display_h, TRUE);
+	//obszar przyciskow
+	int buttons_top = display_y + display_h + padding; //zaczynaja sie pod displayem
+	int buttons_height = height - buttons_top - padding; //ile miejsca maja przyciski
+	int buttons_width = width - 2 * padding;
+
+	int rows = 5;
+	int cols = 4;
+	//rozmiary jednej komorki
+	int cell_w = (buttons_width - (cols - 1) * padding) / cols;
+	int cell_h = (buttons_height - (rows - 1) * padding) / rows;
+
+	if (cell_w < 40) cell_w = 40;
+	if (cell_h < 30) cell_h = 30;
+
+	int index = 0;
+
+	for (int row = 0; row < 4; row++) { //tworzymy 4 rzedy - 16 przyciskow
+		for (int col = 0; col < 4; col++) {
+			//pozycja przycisku
+			int x = padding + col * (cell_w + padding);
+			int y = buttons_top + row * (cell_h + padding);
+			MoveWindow(m_buttons[index], x, y, cell_w, cell_h, TRUE); //ustawiamy pozycje i rozmiar
+			index++;
+		}
+	}
+	//ostatni rzad
+	int last_row_y = buttons_top + 4 * (cell_h + padding);
+	int bs_x = padding;
+	int bs_y = last_row_y;
+	int bs_w = cell_w;
+	int bs_h = cell_h;
+
+	MoveWindow(m_buttons[16], bs_x, bs_y, bs_w, bs_h, TRUE);
+
+	int eq_x = padding + cell_w + padding;
+	int eq_y = last_row_y;
+	int eq_w = buttons_width - cell_w - padding;
+	int eq_h = cell_h;
+
+	MoveWindow(m_buttons[17], eq_x, eq_y, eq_w, eq_h, TRUE);
+}
 LRESULT calculator::window_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 	calculator* app = nullptr;
 	if (message == WM_NCCREATE)
@@ -221,6 +315,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	case WM_CREATE:
 		m_main = window;
 		create_display(window);
+		create_buttons(window); //tworzymy przyciski
 		return 0;
 	case WM_SIZE:
 	{
@@ -294,9 +389,12 @@ calculator::calculator(HINSTANCE instance)
 	m_main{}, 
 	m_display{},
 	m_accel{},
-	m_history_text{ L"12 + 7 =" },
-	m_result_text{ L"19" }
+	m_history_text{ L"" },
+	m_result_text{ L"0" }
 {
+	for (int i = 0; i < 18; i++) {
+		m_buttons[i] = nullptr;
+	}
 	register_class();
 	register_display_class();
 	m_main = create_window();

@@ -17,12 +17,15 @@ private:
 	
 	HWND create_window();
 	void create_display(HWND parent);
+	void create_buttons(HWND parent);
 	void resize_children(int width, int height);
 
 	HINSTANCE m_instance;
 	HWND m_main;
 	HWND m_display;
 	HACCEL m_accel; //uchwyt akceleratora
+
+	HWND m_buttons[18]; //tablica uchwytow do przyciskow
 
 	std::wstring m_history_text;
 	std::wstring m_result_text;
