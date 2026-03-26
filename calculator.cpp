@@ -1,5 +1,6 @@
 #include "calculator.h"
 #include "Resource.h"
+#include <windowsx.h>
 #include <stdexcept>
 #include <cstdint>
 #include <cstring>
@@ -335,6 +336,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		create_display(window);
 		create_programmer_controls(window);
 		create_buttons(window); //tworzymy przyciski
+		create_bit_hint(window);
 		sync_programmer_ui();
 		return 0;
 	case WM_SIZE:
@@ -386,9 +388,22 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_pending_operator = 0;
 			m_start_new_input = false;
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
+		}
+		case WM_CTLCOLORSTATIC:
+		{
+			HDC hdc = reinterpret_cast<HDC>(wparam);
+			HWND ctrl = reinterpret_cast<HWND>(lparam);
+
+			if (ctrl == m_bit_hint) {
+				SetTextColor(hdc, RGB(0, 0, 0));
+				SetBkColor(hdc, RGB(255, 255, 210));
+				static HBRUSH hintBrush = CreateSolidBrush(RGB(255, 255, 210));
+				return reinterpret_cast<LRESULT>(hintBrush);
+			}
+			break;
 		}
 		case ID_BTN_0:
 		case ID_BTN_1:
@@ -423,7 +438,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				m_result_text += digit;
 			}
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 		}
@@ -460,7 +475,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_history_text = double_to_text(m_stored_value) + L" " + op;
 			m_start_new_input = true;
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 		}
@@ -474,7 +489,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				m_result_text += L'.';
 			}
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 
@@ -484,7 +499,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_stored_value = 0.0;
 			m_pending_operator = 0;
 			m_start_new_input = false;
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 
@@ -495,7 +510,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			if (m_result_text.empty())
 				m_result_text = L"0";
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 
@@ -519,7 +534,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				m_start_new_input = true;
 			}
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			SetFocus(window);
 			return 0;
 		}
@@ -580,7 +595,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_start_new_input = true;
 		}
 
-		update_display(m_display, m_history_text, m_result_text);
+		update_all_displays();
 		return 0;
 	}
 	case WM_KEYDOWN:
@@ -622,7 +637,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				m_start_new_input = true;
 			}
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			return 0;
 		}
 
@@ -633,7 +648,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			if (m_result_text.empty())
 				m_result_text = L"0";
 
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			return 0;
 
 		case VK_ESCAPE:
@@ -642,7 +657,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_stored_value = 0.0;
 			m_pending_operator = 0;
 			m_start_new_input = false;
-			update_display(m_display, m_history_text, m_result_text);
+			update_all_displays();
 			return 0;
 		}
 		break;
@@ -665,7 +680,9 @@ calculator::calculator(HINSTANCE instance)
 	m_start_new_input{ false },
 	m_mode{ CalcMode::Basic },
 	m_data_type{ DataType::Int32 },
-	m_bits{ 0 }
+	m_bits{ 0 },
+	m_hover_bit_index{ -1 },
+	m_bit_hint{}
 {
 	for (int i = 0; i < 18; i++) {
 		m_buttons[i] = nullptr;
@@ -825,16 +842,124 @@ void calculator::sync_programmer_ui() {
 }
 
 std::wstring calculator::get_display_text() const {
-	return m_result_text;
+	switch (m_data_type) {
+	case DataType::Int8:
+		return std::to_wstring(static_cast<int8_t>(m_bits));
+	case DataType::UInt8:
+		return std::to_wstring(static_cast<uint8_t>(m_bits));
+	case DataType::Int16:
+		return std::to_wstring(static_cast<int16_t>(m_bits));
+	case DataType::UInt16:
+		return std::to_wstring(static_cast<uint16_t>(m_bits));
+	case DataType::Int32:
+		return std::to_wstring(static_cast<int32_t>(m_bits));
+	case DataType::UInt32:
+		return std::to_wstring(static_cast<uint32_t>(m_bits));
+	case DataType::Int64:
+		return std::to_wstring(static_cast<int64_t>(m_bits));
+	case DataType::UInt64:
+		return std::to_wstring(static_cast<uint64_t>(m_bits));
+
+	case DataType::Float32:
+	{
+		uint32_t raw = static_cast<uint32_t>(m_bits);
+		float f = 0.0f;
+		std::memcpy(&f, &raw, sizeof(f));
+		return double_to_text(f);
+	}
+
+	case DataType::Float64:
+	{
+		uint64_t raw = m_bits;
+		double d = 0.0;
+		std::memcpy(&d, &raw, sizeof(d));
+		return double_to_text(d);
+	}
+
+	case DataType::Half:
+		return L"0";
+	}
+
+	return L"0";
 }
 
 void calculator::update_all_displays() {
+	sync_bits_from_result_text();
 	update_display(m_display, m_history_text, m_result_text);
 	InvalidateRect(m_bits_display, nullptr, TRUE);
 }
 
 LRESULT CALLBACK calculator::bits_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+	calculator* app = reinterpret_cast<calculator*>(GetWindowLongPtrW(GetParent(window), GWLP_USERDATA));
+	if (!app) return DefWindowProcW(window, message, wparam, lparam);
+
 	switch (message) {
+	case WM_ERASEBKGND:
+		return 1;
+
+	case WM_MOUSEMOVE:
+	{
+		RECT rect{};
+		GetClientRect(window, &rect);
+
+		int visible_bits = app->get_visible_bit_count();
+		int total_w = rect.right - rect.left;
+		int box_w =total_w / visible_bits;
+		if (box_w < 6) box_w = 6;
+
+		int x = GET_X_LPARAM(lparam);
+		int bit_index = x / box_w;
+		if (bit_index < 0 || bit_index >= visible_bits)
+			bit_index = -1;
+
+		if (app->m_hover_bit_index != bit_index) {
+			app->m_hover_bit_index = bit_index;
+			InvalidateRect(window, nullptr, TRUE);
+		}
+
+		TRACKMOUSEEVENT tme{};
+		tme.cbSize = sizeof(tme);
+		tme.dwFlags = TME_LEAVE;
+		tme.hwndTrack = window;
+		TrackMouseEvent(&tme);
+
+		if (bit_index >= 0) {
+			POINT pt{ GET_X_LPARAM(lparam), GET_Y_LPARAM(lparam) };
+			ClientToScreen(window, &pt);
+			app->update_tooltip_for_bit(bit_index, pt);
+		}
+
+		return 0;
+	}
+
+	case WM_MOUSELEAVE:
+	{
+		app->m_hover_bit_index = -1;
+		InvalidateRect(window, nullptr, TRUE);
+		app->hide_bit_hint();
+		return 0;
+	}
+
+	case WM_LBUTTONDOWN:
+	{
+		RECT rect{};
+		GetClientRect(window, &rect);
+
+		int visible_bits = app->get_visible_bit_count();
+		int total_w = rect.right - rect.left;
+		int box_w = total_w / visible_bits;
+		if (box_w < 6) box_w = 6;
+
+		int x = GET_X_LPARAM(lparam);
+		int bit_index = x / box_w;
+
+		if (bit_index >= 0 && bit_index < visible_bits) {
+			app->toggle_bit(bit_index);
+		}
+		app->hide_bit_hint();
+		return 0;
+	}
+
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps{};
@@ -842,32 +967,92 @@ LRESULT CALLBACK calculator::bits_proc_static(HWND window, UINT message, WPARAM 
 
 		RECT rect{};
 		GetClientRect(window, &rect);
-		FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW + 1));
-		SetBkMode(hdc, TRANSPARENT);
 
-		calculator* app = reinterpret_cast<calculator*>(GetWindowLongPtrW(GetParent(window), GWLP_USERDATA));
-		if (app) {
-			const int total_bits = 32; // Stage 1: mo?esz zacz?? od 32, potem rozszerzysz do 64
-			int box_w = (rect.right - rect.left) / total_bits;
-			if (box_w < 12) box_w = 12;
+		int width = rect.right - rect.left;
+		int height = rect.bottom - rect.top;
 
-			for (int i = 0; i < total_bits; i++) {
-				int bit_index = total_bits - 1 - i;
-				bool bit = ((app->m_bits >> bit_index) & 1ULL) != 0;
+		HDC memdc = CreateCompatibleDC(hdc);
+		HBITMAP membmp = CreateCompatibleBitmap(hdc, width, height);
+		HBITMAP oldbmp = (HBITMAP)SelectObject(memdc, membmp);
 
-				RECT box{
-					rect.left + i * box_w,
-					rect.top,
-					rect.left + (i + 1) * box_w,
-					rect.bottom
-				};
+		FillRect(memdc, &rect, (HBRUSH)(COLOR_WINDOW + 1));
+		SetBkMode(memdc, TRANSPARENT);
 
-				DrawEdge(hdc, &box, BDR_SUNKENOUTER, BF_RECT);
+		int visible_bits = app->get_visible_bit_count();
+		int box_w = width / visible_bits;
+		if (box_w < 6) box_w = 6;
 
-				std::wstring text = bit ? L"1" : L"0";
-				DrawTextW(hdc, text.c_str(), -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+		int exp_bits = app->get_exponent_bits();
+		int mant_bits = app->get_mantissa_bits();
+
+		int font_h = box_w - 3;
+		if (font_h < 6) font_h = 6;
+		if (font_h > 18) font_h = 18;
+		HFONT font = CreateFontW(
+			-font_h, 0, 0, 0,
+			FW_NORMAL, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+			CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+			DEFAULT_PITCH | FF_SWISS, L"Segoe UI"
+		);
+		HFONT oldfont = (HFONT)SelectObject(memdc, font);
+
+		for (int i = 0; i < visible_bits; i++) {
+			int shift = visible_bits - 1 - i;
+			bool bit = ((app->m_bits >> shift) & 1ULL) != 0;
+
+			RECT box{
+				rect.left + i * box_w,
+				rect.top,
+				min(rect.left + (i + 1) * box_w, rect.right),
+				rect.bottom
+			};
+
+			COLORREF bg = RGB(255, 255, 255);
+			COLORREF fg = RGB(0, 0, 0);
+
+			if (app->is_float_type()) {
+				if (i == 0) {
+					bg = RGB(255, 230, 230);
+					fg = RGB(180, 0, 0);
+				}
+				else if (i <= exp_bits) {
+					bg = RGB(230, 255, 230);
+					fg = RGB(0, 140, 0);
+				}
+				else {
+					bg = RGB(230, 240, 255);
+					fg = RGB(0, 70, 180);
+				}
 			}
+
+			if (i == app->m_hover_bit_index) {
+				bg = RGB(
+					min(255, GetRValue(bg) - 20),
+					min(255, GetGValue(bg) - 20),
+					min(255, GetBValue(bg) - 20)
+				);
+			}
+
+			HBRUSH boxBrush = CreateSolidBrush(bg);
+			FillRect(memdc, &box, boxBrush);
+			DeleteObject(boxBrush);
+
+			DrawEdge(memdc, &box, BDR_SUNKENOUTER, BF_RECT);
+
+			SetTextColor(memdc, fg);
+			const wchar_t* txt = bit ? L"1" : L"0";
+			DrawTextW(memdc, txt, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 		}
+
+		BitBlt(hdc, 0, 0, width, height, memdc, 0, 0, SRCCOPY);
+
+		SelectObject(memdc, oldfont);
+		DeleteObject(font);
+
+		SelectObject(memdc, oldbmp);
+		DeleteObject(membmp);
+		DeleteDC(memdc);
 
 		EndPaint(window, &ps);
 		return 0;
@@ -875,4 +1060,191 @@ LRESULT CALLBACK calculator::bits_proc_static(HWND window, UINT message, WPARAM 
 	}
 
 	return DefWindowProcW(window, message, wparam, lparam);
+}
+
+bool calculator::is_float_type() const {
+	return m_data_type == DataType::Half || m_data_type == DataType::Float32 || m_data_type == DataType::Float64;
+}
+
+int calculator::get_visible_bit_count() const {
+	switch (m_data_type) {
+	case DataType::Int8:
+	case DataType::UInt8:
+		return 8;
+	case DataType::Int16:
+	case DataType::UInt16:
+	case DataType::Half:
+		return 16;
+	case DataType::Int32:
+	case DataType::UInt32:
+	case DataType::Float32:
+		return 32;
+	case DataType::Int64:
+	case DataType::UInt64:
+	case DataType::Float64:
+		return 64;
+	}
+	return 32;
+}
+
+int calculator::get_exponent_bits() const {
+	switch (m_data_type) {
+	case DataType::Half: return 5;
+	case DataType::Float32: return 8;
+	case DataType::Float64: return 11;
+	default: return 0;
+	}
+}
+
+int calculator::get_mantissa_bits() const {
+	switch (m_data_type) {
+	case DataType::Half: return 10;
+	case DataType::Float32: return 23;
+	case DataType::Float64: return 52;
+	default: return 0;
+	}
+}
+
+void calculator::toggle_bit(int bit_index) { //klikanie bitow
+	int visible_bits = get_visible_bit_count();
+	int shift = visible_bits - 1 - bit_index;
+	if (shift < 0 || shift >= 64) return;
+
+	m_bits ^= (1ULL << shift);
+
+	if (m_mode == CalcMode::Programmer) {
+		m_result_text = get_display_text();
+		update_all_displays();
+	}
+}
+
+//tooltip dla konkretnego bitu
+void calculator::update_tooltip_for_bit(int bit_index, POINT screen_pt) {
+	if (bit_index < 0) return;
+
+	wchar_t tip[256];
+
+	int visible_bits = get_visible_bit_count();
+	int logical_bit = visible_bits - 1 - bit_index;
+
+	if (!is_float_type()) {
+		swprintf_s(tip, L"Bit %d, weight: 2^%d", logical_bit, logical_bit);
+	}
+	else {
+		int exp_bits = get_exponent_bits();
+
+		if (bit_index == 0) {
+			swprintf_s(tip, L"Sign bit");
+		}
+		else if (bit_index <= exp_bits) {
+			int exp_pos = exp_bits - bit_index;
+			int bias = (1 << (exp_bits - 1)) - 1;
+			swprintf_s(tip, L"Exponent bit, weight: 2^%d (Bias: %d)", exp_pos, bias);
+		}
+		else {
+			int mant_index = bit_index - 1 - exp_bits;
+			swprintf_s(tip, L"Mantissa bit, weight: 2^-%d", mant_index + 1);
+		}
+	}
+
+	show_bit_hint(tip, screen_pt);
+}
+
+void calculator::sync_bits_from_result_text() {
+	if (m_result_text.empty() || m_result_text == L"-" || m_result_text == L"." || m_result_text == L"-.")
+		return;
+
+	switch (m_data_type) {
+	case DataType::Int8:
+		m_bits = static_cast<uint8_t>(static_cast<int8_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		break;
+	case DataType::UInt8:
+		m_bits = static_cast<uint8_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		break;
+	case DataType::Int16:
+		m_bits = static_cast<uint16_t>(static_cast<int16_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		break;
+	case DataType::UInt16:
+		m_bits = static_cast<uint16_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		break;
+	case DataType::Int32:
+		m_bits = static_cast<uint32_t>(static_cast<int32_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		break;
+	case DataType::UInt32:
+		m_bits = static_cast<uint32_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		break;
+	case DataType::Int64:
+		m_bits = static_cast<uint64_t>(static_cast<int64_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		break;
+	case DataType::UInt64:
+		m_bits = static_cast<uint64_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		break;
+
+	case DataType::Float32:
+	{
+		float f = static_cast<float>(std::wcstod(m_result_text.c_str(), nullptr));
+		uint32_t raw = 0;
+		std::memcpy(&raw, &f, sizeof(f));
+		m_bits = raw;
+		break;
+	}
+
+	case DataType::Float64:
+	{
+		double d = std::wcstod(m_result_text.c_str(), nullptr);
+		uint64_t raw = 0;
+		std::memcpy(&raw, &d, sizeof(d));
+		m_bits = raw;
+		break;
+	}
+
+	case DataType::Half:
+		m_bits = 0;
+		break;
+	}
+}
+
+void calculator::create_bit_hint(HWND parent) {
+	m_bit_hint = CreateWindowExW(
+		WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+		L"STATIC",
+		L"",
+		WS_POPUP | SS_LEFT,
+		0, 0, 0, 0,
+		parent,
+		nullptr,
+		m_instance,
+		nullptr
+	);
+
+	SendMessageW(m_bit_hint, WM_SETFONT,
+		reinterpret_cast<WPARAM>(GetStockObject(DEFAULT_GUI_FONT)), TRUE);
+}
+void calculator::show_bit_hint(const std::wstring& text, POINT screen_pt) {
+	if (!m_bit_hint) return;
+
+	SetWindowTextW(m_bit_hint, text.c_str());
+
+	HDC hdc = GetDC(m_bit_hint);
+	RECT rc{ 0, 0, 0, 0 };
+	DrawTextW(hdc, text.c_str(), -1, &rc, DT_CALCRECT | DT_SINGLELINE);
+	ReleaseDC(m_bit_hint, hdc);
+
+	int width = (rc.right - rc.left) + 12;
+	int height = (rc.bottom - rc.top) + 8;
+
+	SetWindowPos(
+		m_bit_hint,
+		HWND_TOPMOST,
+		screen_pt.x + 16,
+		screen_pt.y + 20,
+		width,
+		height,
+		SWP_SHOWWINDOW | SWP_NOACTIVATE
+	);
+}
+void calculator::hide_bit_hint() {
+	if (m_bit_hint) {
+		ShowWindow(m_bit_hint, SW_HIDE);
+	}
 }

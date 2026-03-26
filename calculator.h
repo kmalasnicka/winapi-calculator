@@ -49,6 +49,13 @@ private:
 	void set_mode(CalcMode mode);
 	void sync_programmer_ui(); //odpowiada za widocznosc w programmer pokazuje panel bitow + combo w basic je ukrywa
 	void update_all_displays();
+	int get_visible_bit_count() const;
+	bool is_float_type() const;
+	int get_exponent_bits() const;
+	int get_mantissa_bits() const;
+	void update_tooltip_for_bit(int bit_index, POINT screen_pt);
+	void toggle_bit(int bit_index);
+	void sync_bits_from_result_text();
 
 	std::wstring get_display_text() const;
 
@@ -58,6 +65,7 @@ private:
 	HWND m_bits_display; //panel bitow
 	HWND m_type_combo; 
 	HACCEL m_accel; //uchwyt akceleratora
+	int m_hover_bit_index;
 
 	HWND m_buttons[18]; //tablica uchwytow do przyciskow
 
@@ -71,6 +79,10 @@ private:
 	CalcMode m_mode;
 	DataType m_data_type; 
 	uint64_t m_bits; //przechowuje aktualna wartosc jako surowe bity
+	HWND m_bit_hint;
+	void create_bit_hint(HWND parent);
+	void show_bit_hint(const std::wstring& text, POINT screen_pt);
+	void hide_bit_hint();
 public:
 	calculator(HINSTANCE instance);
 	int run(int show_command);
