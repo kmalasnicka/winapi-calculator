@@ -35,6 +35,11 @@ struct DisplayState {
 	DisplayState() : history_font(nullptr), result_font(nullptr) {}
 };
 
+void update_display(HWND display, const std::wstring& history, const std::wstring& result);
+double text_to_double(const std::wstring& text);
+std::wstring double_to_text(double value);
+double calculate(double left, double right, wchar_t op);
+
 bool calculator::register_class() {
 	WNDCLASSEXW desc{};
 	if (GetClassInfoExW(m_instance, s_class_name.c_str(), &desc) != 0) return true;
@@ -119,7 +124,7 @@ void calculator::create_buttons(HWND parent) {
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
 			0, 0, 0, 0,
 			parent,
-			(HMENU)ids[i], //id
+			reinterpret_cast<HMENU>(static_cast<INT_PTR>(ids[i])), //id
 			m_instance,
 			nullptr
 		);
@@ -354,14 +359,12 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		{
 			m_history_text.clear();
 			m_result_text = L"0";
+			m_stored_value = 0.0;
+			m_pending_operator = 0;
+			m_start_new_input = false;
 
-			auto* state = reinterpret_cast<DisplayState*>(GetWindowLongPtrW(m_display, GWLP_USERDATA));
-			if (state) {
-				state->history = m_history_text;
-				state->result = m_result_text;
-			}
-
-			InvalidateRect(m_display, nullptr, TRUE);
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
 			return 0;
 		}
 
@@ -376,9 +379,241 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 
 		case IDM_MODE_PROGRAMMER:
 			MessageBoxW(window, L"Not implemented yet", L"Programmer mode", MB_OK | MB_ICONINFORMATION);
+			SetFocus(window);
+			return 0;
+		
+		case ID_BTN_0:
+		case ID_BTN_1:
+		case ID_BTN_2:
+		case ID_BTN_3:
+		case ID_BTN_4:
+		case ID_BTN_5:
+		case ID_BTN_6:
+		case ID_BTN_7:
+		case ID_BTN_8:
+		case ID_BTN_9:
+		{
+			wchar_t digit;
+			switch (LOWORD(wparam)) {
+			case ID_BTN_0: digit = L'0'; break;
+			case ID_BTN_1: digit = L'1'; break;
+			case ID_BTN_2: digit = L'2'; break;
+			case ID_BTN_3: digit = L'3'; break;
+			case ID_BTN_4: digit = L'4'; break;
+			case ID_BTN_5: digit = L'5'; break;
+			case ID_BTN_6: digit = L'6'; break;
+			case ID_BTN_7: digit = L'7'; break;
+			case ID_BTN_8: digit = L'8'; break;
+			default:       digit = L'9'; break;
+			}
+
+			if (m_start_new_input || m_result_text == L"0") {
+				m_result_text = std::wstring(1, digit);
+				m_start_new_input = false;
+			}
+			else {
+				m_result_text += digit;
+			}
+
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
 			return 0;
 		}
+
+		case ID_BTN_ADD:
+		case ID_BTN_SUB:
+		case ID_BTN_MUL:
+		case ID_BTN_DIV:
+		{
+			wchar_t op;
+			switch (LOWORD(wparam)) {
+			case ID_BTN_ADD: op = L'+'; break;
+			case ID_BTN_SUB: op = L'-'; break;
+			case ID_BTN_MUL: op = L'*'; break;
+			default:         op = L'/'; break;
+			}
+
+			if (m_pending_operator != 0 && !m_start_new_input) {
+				double right = text_to_double(m_result_text);
+
+				if (m_pending_operator == L'/' && right == 0.0) {
+					MessageBoxW(window, L"Cannot divide by zero.", L"Error", MB_OK | MB_ICONERROR);
+					SetFocus(window);
+					return 0;
+				}
+
+				m_stored_value = calculate(m_stored_value, right, m_pending_operator);
+				m_result_text = double_to_text(m_stored_value);
+			}
+			else {
+				m_stored_value = text_to_double(m_result_text);
+			}
+
+			m_pending_operator = op;
+			m_history_text = double_to_text(m_stored_value) + L" " + op;
+			m_start_new_input = true;
+
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
+			return 0;
+		}
+
+		case ID_BTN_DOT:
+			if (m_start_new_input) {
+				m_result_text = L"0.";
+				m_start_new_input = false;
+			}
+			else if (m_result_text.find(L'.') == std::wstring::npos) {
+				m_result_text += L'.';
+			}
+
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
+			return 0;
+
+		case ID_BTN_C:
+			m_history_text.clear();
+			m_result_text = L"0";
+			m_stored_value = 0.0;
+			m_pending_operator = 0;
+			m_start_new_input = false;
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
+			return 0;
+
+		case ID_BTN_BS:
+			if (!m_result_text.empty())
+				m_result_text.pop_back();
+
+			if (m_result_text.empty())
+				m_result_text = L"0";
+
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
+			return 0;
+
+		case ID_BTN_EQ:
+		{
+			if (m_pending_operator != 0) {
+				double right = text_to_double(m_result_text);
+
+				if (m_pending_operator == L'/' && right == 0.0) {
+					MessageBoxW(window, L"Cannot divide by zero.", L"Error", MB_OK | MB_ICONERROR);
+					SetFocus(window);
+					return 0;
+				}
+
+				double result = calculate(m_stored_value, right, m_pending_operator);
+
+				m_history_text = double_to_text(m_stored_value) + L" " + m_pending_operator + L" " + m_result_text + L" =";
+				m_result_text = double_to_text(result);
+				m_stored_value = result;
+				m_pending_operator = 0;
+				m_start_new_input = true;
+			}
+
+			update_display(m_display, m_history_text, m_result_text);
+			SetFocus(window);
+			return 0;
+		}
+		}
 		return 0;
+	}
+	case WM_CHAR:
+	{
+		wchar_t ch = (wchar_t)wparam;
+
+		if (ch >= L'0' && ch <= L'9') {
+			if (m_start_new_input || m_result_text == L"0") {
+				m_result_text = std::wstring(1, ch);
+				m_start_new_input = false;
+			}
+			else {
+				m_result_text += ch;
+			}
+		}
+
+		else if (ch == L'.') {
+			if (m_start_new_input) {
+				m_result_text = L"0.";
+				m_start_new_input = false;
+			}
+			else if (m_result_text.find(L'.') == std::wstring::npos) {
+				m_result_text += L'.';
+			}
+		}
+
+		else if (ch == L'+' || ch == L'-' || ch == L'*' || ch == L'/') {
+			if (m_pending_operator != 0 && !m_start_new_input) {
+				double right = text_to_double(m_result_text);
+
+				if (m_pending_operator == L'/' && right == 0.0) {
+					MessageBoxW(window, L"Cannot divide by zero.", L"Error", MB_OK | MB_ICONERROR);
+					return 0;
+				}
+
+				m_stored_value = calculate(m_stored_value, right, m_pending_operator);
+				m_result_text = double_to_text(m_stored_value);
+			}
+			else {
+				m_stored_value = text_to_double(m_result_text);
+			}
+
+			m_pending_operator = ch;
+			m_history_text = double_to_text(m_stored_value) + L" " + ch;
+			m_start_new_input = true;
+		}
+
+		update_display(m_display, m_history_text, m_result_text);
+		return 0;
+	}
+	case WM_KEYDOWN:
+	{
+		switch (wparam)
+		{
+		case VK_RETURN:
+		{
+			if (m_pending_operator != 0) {
+				double right = text_to_double(m_result_text);
+
+				if (m_pending_operator == L'/' && right == 0.0) {
+					MessageBoxW(window, L"Cannot divide by zero.", L"Error", MB_OK | MB_ICONERROR);
+					return 0;
+				}
+
+				double result = calculate(m_stored_value, right, m_pending_operator);
+
+				m_history_text = double_to_text(m_stored_value) + L" " + m_pending_operator + L" " + m_result_text + L" =";
+				m_result_text = double_to_text(result);
+				m_stored_value = result;
+				m_pending_operator = 0;
+				m_start_new_input = true;
+			}
+
+			update_display(m_display, m_history_text, m_result_text);
+			return 0;
+		}
+
+		case VK_BACK:
+			if (!m_result_text.empty())
+				m_result_text.pop_back();
+
+			if (m_result_text.empty())
+				m_result_text = L"0";
+
+			update_display(m_display, m_history_text, m_result_text);
+			return 0;
+
+		case VK_ESCAPE:
+			m_history_text.clear();
+			m_result_text = L"0";
+			m_stored_value = 0.0;
+			m_pending_operator = 0;
+			m_start_new_input = false;
+			update_display(m_display, m_history_text, m_result_text);
+			return 0;
+		}
+		break;
 	}
 	}
 	return DefWindowProcW(window, message, wparam, lparam);
@@ -390,7 +625,10 @@ calculator::calculator(HINSTANCE instance)
 	m_display{},
 	m_accel{},
 	m_history_text{ L"" },
-	m_result_text{ L"0" }
+	m_result_text{ L"0" },
+	m_stored_value{ 0.0 },
+	m_pending_operator{ 0 },
+	m_start_new_input{ false }
 {
 	for (int i = 0; i < 18; i++) {
 		m_buttons[i] = nullptr;
@@ -417,3 +655,40 @@ int calculator::run(int show_command)
 	return EXIT_SUCCESS;
 }
 
+void update_display(HWND display, const std::wstring& history, const std::wstring& result) {
+	auto* state = reinterpret_cast<DisplayState*>(GetWindowLongPtrW(display, GWLP_USERDATA));
+	if (state) {
+		state->history = history;
+		state->result = result;
+	}
+	InvalidateRect(display, nullptr, TRUE);
+}
+
+double text_to_double(const std::wstring& text) {
+	return std::wcstod(text.c_str(), nullptr);
+}
+
+std::wstring double_to_text(double value) {
+	std::wstring text = std::to_wstring(value);
+
+	while (!text.empty() && text.back() == L'0')
+		text.pop_back();
+
+	if (!text.empty() && text.back() == L'.')
+		text.pop_back();
+
+	if (text.empty())
+		text = L"0";
+
+	return text;
+}
+
+double calculate(double left, double right, wchar_t op) {
+	switch (op) {
+	case L'+': return left + right;
+	case L'-': return left - right;
+	case L'*': return left * right;
+	case L'/': return left / right;
+	default:   return right;
+	}
+}

@@ -29,6 +29,11 @@ private:
 
 	std::wstring m_history_text;
 	std::wstring m_result_text;
+
+	double m_stored_value;
+	wchar_t m_pending_operator;
+	bool m_start_new_input;
+
 public:
 	calculator(HINSTANCE instance);
 	int run(int show_command);
