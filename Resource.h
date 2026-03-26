@@ -19,6 +19,9 @@
 #define IDM_MODE_BASIC      32771
 #define IDM_MODE_PROGRAMMER 32772
 #define IDM_EDIT_CLEAR      32773
+
+#define IDC_TYPE_COMBO          4001
+#define IDC_BITS_VIEW           4002
 #endif
 // Next default values for new objects
 //

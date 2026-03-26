@@ -1,6 +1,10 @@
 #include "calculator.h"
 #include "Resource.h"
 #include <stdexcept>
+#include <cstdint>
+#include <cstring>
+#include <cmath>
+#include <limits>
 
 enum ButtonIds { //identyfikatory przyciskow
 	ID_BTN_7 = 2001,
@@ -25,6 +29,7 @@ enum ButtonIds { //identyfikatory przyciskow
 
 std::wstring const calculator::s_class_name{ L"window" };
 std::wstring const calculator::s_display_class_name{ L"calculator_display" };
+std::wstring const calculator::s_bits_class_name{ L"calculator_bits" };
 
 struct DisplayState {
 	std::wstring history;
@@ -72,7 +77,7 @@ HWND calculator::create_window()
 	return CreateWindowExW(
 		0,
 		s_class_name.c_str(),
-		L"calculator",
+		L"DevCalculator",
 		WS_OVERLAPPEDWINDOW,
 		CW_USEDEFAULT, 0,
 		400, 500,
@@ -132,24 +137,44 @@ void calculator::create_buttons(HWND parent) {
 }
 
 void calculator::resize_children(int width, int height) {
-	const int padding = 5; //odstep miedzy elementami
-	//display zajmuje 1/4 wysokosci
+	const int padding = 5;
+
 	int display_x = padding;
 	int display_y = padding;
 	int display_w = width - 2 * padding;
 	int display_h = height / 4;
-
 	if (display_h < 60) display_h = 60;
 
 	MoveWindow(m_display, display_x, display_y, display_w, display_h, TRUE);
-	//obszar przyciskow
-	int buttons_top = display_y + display_h + padding; //zaczynaja sie pod displayem
-	int buttons_height = height - buttons_top - padding; //ile miejsca maja przyciski
+
+	int top_after_display = display_y + display_h + padding;
+
+	int buttons_top = top_after_display;
+
+	if (m_mode == CalcMode::Programmer) {
+		int bits_h = 70;
+		int combo_visible_h = 28;
+		int combo_total_h = 200;
+
+		ShowWindow(m_bits_display, SW_SHOW);
+		ShowWindow(m_type_combo, SW_SHOW);
+
+		MoveWindow(m_bits_display, padding, top_after_display, width - 2 * padding, bits_h, TRUE);
+		MoveWindow(m_type_combo, padding, top_after_display + bits_h + padding, width - 2 * padding, combo_total_h, TRUE);
+
+		buttons_top = top_after_display + bits_h + padding + combo_visible_h + padding;
+	}
+	else {
+		ShowWindow(m_bits_display, SW_HIDE);
+		ShowWindow(m_type_combo, SW_HIDE);
+	}
+
+	int buttons_height = height - buttons_top - padding;
 	int buttons_width = width - 2 * padding;
 
 	int rows = 5;
 	int cols = 4;
-	//rozmiary jednej komorki
+
 	int cell_w = (buttons_width - (cols - 1) * padding) / cols;
 	int cell_h = (buttons_height - (rows - 1) * padding) / rows;
 
@@ -157,32 +182,20 @@ void calculator::resize_children(int width, int height) {
 	if (cell_h < 30) cell_h = 30;
 
 	int index = 0;
-
-	for (int row = 0; row < 4; row++) { //tworzymy 4 rzedy - 16 przyciskow
+	for (int row = 0; row < 4; row++) {
 		for (int col = 0; col < 4; col++) {
-			//pozycja przycisku
 			int x = padding + col * (cell_w + padding);
 			int y = buttons_top + row * (cell_h + padding);
-			MoveWindow(m_buttons[index], x, y, cell_w, cell_h, TRUE); //ustawiamy pozycje i rozmiar
+			MoveWindow(m_buttons[index], x, y, cell_w, cell_h, TRUE);
 			index++;
 		}
 	}
-	//ostatni rzad
+
 	int last_row_y = buttons_top + 4 * (cell_h + padding);
-	int bs_x = padding;
-	int bs_y = last_row_y;
-	int bs_w = cell_w;
-	int bs_h = cell_h;
-
-	MoveWindow(m_buttons[16], bs_x, bs_y, bs_w, bs_h, TRUE);
-
-	int eq_x = padding + cell_w + padding;
-	int eq_y = last_row_y;
-	int eq_w = buttons_width - cell_w - padding;
-	int eq_h = cell_h;
-
-	MoveWindow(m_buttons[17], eq_x, eq_y, eq_w, eq_h, TRUE);
+	MoveWindow(m_buttons[16], padding, last_row_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[17], padding + cell_w + padding, last_row_y, buttons_width - cell_w - padding, cell_h, TRUE);
 }
+
 LRESULT calculator::window_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 	calculator* app = nullptr;
 	if (message == WM_NCCREATE)
@@ -320,7 +333,9 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	case WM_CREATE:
 		m_main = window;
 		create_display(window);
+		create_programmer_controls(window);
 		create_buttons(window); //tworzymy przyciski
+		sync_programmer_ui();
 		return 0;
 	case WM_SIZE:
 	{
@@ -345,6 +360,14 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	}
 	case WM_COMMAND: //obsluga komend menu
 	{
+		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_TYPE_COMBO) {
+			int sel = static_cast<int>(SendMessageW(m_type_combo, CB_GETCURSEL, 0, 0));
+			if (sel >= 0) {
+				m_data_type = static_cast<DataType>(sel);
+				update_all_displays();
+			}
+			return 0;
+		}
 		switch (LOWORD(wparam))
 		{
 		case IDM_EXIT:
@@ -367,21 +390,6 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			SetFocus(window);
 			return 0;
 		}
-
-		case IDM_MODE_BASIC:
-			CheckMenuRadioItem(
-				GetMenu(window),
-				IDM_MODE_BASIC,
-				IDM_MODE_PROGRAMMER,
-				IDM_MODE_BASIC,
-				MF_BYCOMMAND);
-			return 0;
-
-		case IDM_MODE_PROGRAMMER:
-			MessageBoxW(window, L"Not implemented yet", L"Programmer mode", MB_OK | MB_ICONINFORMATION);
-			SetFocus(window);
-			return 0;
-		
 		case ID_BTN_0:
 		case ID_BTN_1:
 		case ID_BTN_2:
@@ -419,7 +427,6 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			SetFocus(window);
 			return 0;
 		}
-
 		case ID_BTN_ADD:
 		case ID_BTN_SUB:
 		case ID_BTN_MUL:
@@ -516,6 +523,15 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			SetFocus(window);
 			return 0;
 		}
+		case IDM_MODE_BASIC:
+			set_mode(CalcMode::Basic);
+			SetFocus(window);
+			return 0;
+
+		case IDM_MODE_PROGRAMMER:
+			set_mode(CalcMode::Programmer);
+			SetFocus(window);
+			return 0;
 		}
 		return 0;
 	}
@@ -571,6 +587,22 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	{
 		switch (wparam)
 		{
+		case '1':
+			if (GetKeyState(VK_CONTROL) < 0) {
+				set_mode(CalcMode::Basic);
+				update_all_displays();
+				return 0;
+			}
+			break;
+
+		case '2':
+			if (GetKeyState(VK_CONTROL) < 0) {
+				set_mode(CalcMode::Programmer);
+				update_all_displays();
+				return 0;
+			}
+			break;
+
 		case VK_RETURN:
 		{
 			if (m_pending_operator != 0) {
@@ -620,21 +652,28 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 }
 
 calculator::calculator(HINSTANCE instance)
-	: m_instance{ instance }, 
-	m_main{}, 
+	:m_instance{ instance },
+	m_main{},
 	m_display{},
+	m_bits_display{},
+	m_type_combo{},
 	m_accel{},
 	m_history_text{ L"" },
 	m_result_text{ L"0" },
 	m_stored_value{ 0.0 },
 	m_pending_operator{ 0 },
-	m_start_new_input{ false }
+	m_start_new_input{ false },
+	m_mode{ CalcMode::Basic },
+	m_data_type{ DataType::Int32 },
+	m_bits{ 0 }
 {
 	for (int i = 0; i < 18; i++) {
 		m_buttons[i] = nullptr;
 	}
 	register_class();
 	register_display_class();
+	register_bits_class();
+
 	m_main = create_window();
 	m_accel = LoadAcceleratorsW(m_instance, MAKEINTRESOURCEW(IDC_LABY32)); //ladowanie tabeli akceleratorow
 }
@@ -691,4 +730,149 @@ double calculate(double left, double right, wchar_t op) {
 	case L'/': return left / right;
 	default:   return right;
 	}
+}
+
+bool calculator::register_bits_class() {
+	WNDCLASSEXW desc{};
+	if (GetClassInfoExW(m_instance, s_bits_class_name.c_str(), &desc) != 0) return true;
+
+	desc.cbSize = sizeof(WNDCLASSEXW);
+	desc.style = CS_HREDRAW | CS_VREDRAW;
+	desc.lpfnWndProc = bits_proc_static;
+	desc.hInstance = m_instance;
+	desc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+	desc.lpszClassName = s_bits_class_name.c_str();
+	desc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+
+	return RegisterClassExW(&desc) != 0;
+}
+
+void calculator::create_programmer_controls(HWND parent) {
+	m_bits_display = CreateWindowExW(
+		WS_EX_CLIENTEDGE,
+		s_bits_class_name.c_str(),
+		nullptr,
+		WS_CHILD | WS_VISIBLE,
+		0, 0, 0, 0,
+		parent,
+		reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_BITS_VIEW)),
+		m_instance,
+		nullptr
+	);
+
+	m_type_combo = CreateWindowExW(
+		0,
+		L"COMBOBOX",
+		nullptr,
+		WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+		0, 0, 0, 0,
+		parent,
+		reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_TYPE_COMBO)),
+		m_instance,
+		nullptr
+	);
+
+	populate_type_combo();
+}
+
+void calculator::populate_type_combo() {
+	const wchar_t* items[] = {
+		L"Int 8",
+		L"UInt 8",
+		L"Int 16",
+		L"UInt 16",
+		L"Int 32",
+		L"UInt 32",
+		L"Int 64",
+		L"UInt 64",
+		L"Float 16",
+		L"Float 32",
+		L"Float 64"
+	};
+
+	for (const auto* item : items) {
+		SendMessageW(m_type_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(item));
+	}
+
+	SendMessageW(m_type_combo, CB_SETCURSEL, static_cast<WPARAM>(m_data_type), 0);
+}
+
+void calculator::set_mode(CalcMode mode) {
+	m_mode = mode;
+
+	HMENU menu = GetMenu(m_main);
+	CheckMenuRadioItem(
+		menu,
+		IDM_MODE_BASIC,
+		IDM_MODE_PROGRAMMER,
+		mode == CalcMode::Basic ? IDM_MODE_BASIC : IDM_MODE_PROGRAMMER,
+		MF_BYCOMMAND
+	);
+
+	sync_programmer_ui();
+
+	RECT rect{};
+	GetClientRect(m_main, &rect);
+	resize_children(rect.right - rect.left, rect.bottom - rect.top);
+
+	InvalidateRect(m_main, nullptr, TRUE);
+}
+
+void calculator::sync_programmer_ui() {
+	BOOL show = (m_mode == CalcMode::Programmer) ? TRUE : FALSE;
+	ShowWindow(m_bits_display, show ? SW_SHOW : SW_HIDE);
+	ShowWindow(m_type_combo, show ? SW_SHOW : SW_HIDE);
+}
+
+std::wstring calculator::get_display_text() const {
+	return m_result_text;
+}
+
+void calculator::update_all_displays() {
+	update_display(m_display, m_history_text, m_result_text);
+	InvalidateRect(m_bits_display, nullptr, TRUE);
+}
+
+LRESULT CALLBACK calculator::bits_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
+	switch (message) {
+	case WM_PAINT:
+	{
+		PAINTSTRUCT ps{};
+		HDC hdc = BeginPaint(window, &ps);
+
+		RECT rect{};
+		GetClientRect(window, &rect);
+		FillRect(hdc, &rect, (HBRUSH)(COLOR_WINDOW + 1));
+		SetBkMode(hdc, TRANSPARENT);
+
+		calculator* app = reinterpret_cast<calculator*>(GetWindowLongPtrW(GetParent(window), GWLP_USERDATA));
+		if (app) {
+			const int total_bits = 32; // Stage 1: mo?esz zacz?? od 32, potem rozszerzysz do 64
+			int box_w = (rect.right - rect.left) / total_bits;
+			if (box_w < 12) box_w = 12;
+
+			for (int i = 0; i < total_bits; i++) {
+				int bit_index = total_bits - 1 - i;
+				bool bit = ((app->m_bits >> bit_index) & 1ULL) != 0;
+
+				RECT box{
+					rect.left + i * box_w,
+					rect.top,
+					rect.left + (i + 1) * box_w,
+					rect.bottom
+				};
+
+				DrawEdge(hdc, &box, BDR_SUNKENOUTER, BF_RECT);
+
+				std::wstring text = bit ? L"1" : L"0";
+				DrawTextW(hdc, text.c_str(), -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+			}
+		}
+
+		EndPaint(window, &ps);
+		return 0;
+	}
+	}
+
+	return DefWindowProcW(window, message, wparam, lparam);
 }
