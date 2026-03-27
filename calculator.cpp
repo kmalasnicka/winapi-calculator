@@ -26,7 +26,13 @@ enum ButtonIds { //identyfikatory przyciskow
 	ID_BTN_DOT,
 	ID_BTN_ADD,
 	ID_BTN_BS,
-	ID_BTN_EQ
+	ID_BTN_EQ,
+	ID_BTN_A,
+	ID_BTN_B,
+	ID_BTN_C_HEX,
+	ID_BTN_D,
+	ID_BTN_E,
+	ID_BTN_F,
 };
 
 std::wstring const calculator::s_class_name{ L"window" };
@@ -83,8 +89,8 @@ HWND calculator::create_window()
 		s_class_name.c_str(),
 		L"DevCalculator",
 		WS_OVERLAPPEDWINDOW,
-		CW_USEDEFAULT, 0,
-		400, 500,
+		m_window_x, m_window_y,
+		m_window_width, m_window_height,
 		nullptr,
 		LoadMenuW(m_instance, MAKEINTRESOURCEW(IDC_LABY32)), //podpiecie menu do okna
 		m_instance,
@@ -111,7 +117,8 @@ void calculator::create_display(HWND parent) {
 }
 
 void calculator::create_buttons(HWND parent) {
-	const wchar_t* labels[18] = { //tekst na przyciskach
+	const wchar_t* labels[24] = {
+		L"A", L"B", L"C", L"D", L"E", L"F",
 		L"7", L"8", L"9", L"/",
 		L"4", L"5", L"6", L"*",
 		L"1", L"2", L"3", L"-",
@@ -119,7 +126,8 @@ void calculator::create_buttons(HWND parent) {
 		L"BS", L"="
 	};
 
-	const int ids[18] = { //id przypisane do kazdego przycisku
+	const int ids[24] = {
+		ID_BTN_A, ID_BTN_B, ID_BTN_C_HEX, ID_BTN_D, ID_BTN_E, ID_BTN_F,
 		ID_BTN_7, ID_BTN_8, ID_BTN_9, ID_BTN_DIV,
 		ID_BTN_4, ID_BTN_5, ID_BTN_6, ID_BTN_MUL,
 		ID_BTN_1, ID_BTN_2, ID_BTN_3, ID_BTN_SUB,
@@ -127,14 +135,14 @@ void calculator::create_buttons(HWND parent) {
 		ID_BTN_BS, ID_BTN_EQ
 	};
 
-	for (int i = 0; i < 18; i++) { //tworzymy 18 przyciskow
+	for (int i = 0; i < 24; i++) {
 		m_buttons[i] = CreateWindowW(
-			L"BUTTON", //typ kontrolki
-			labels[i], //tekst
+			L"BUTTON",
+			labels[i],
 			WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
 			0, 0, 0, 0,
 			parent,
-			reinterpret_cast<HMENU>(static_cast<INT_PTR>(ids[i])), //id
+			reinterpret_cast<HMENU>(static_cast<INT_PTR>(ids[i])),
 			m_instance,
 			nullptr
 		);
@@ -159,7 +167,6 @@ void calculator::resize_children(int width, int height) {
 		int bits_h = 70;
 		int combo_visible_h = 28;
 		int combo_total_h = 200;
-		int combo_gap = 5;
 
 		ShowWindow(m_bits_display, SW_SHOW);
 		ShowWindow(m_type_combo, SW_SHOW);
@@ -184,28 +191,52 @@ void calculator::resize_children(int width, int height) {
 	int buttons_height = height - buttons_top - padding;
 	int buttons_width = width - 2 * padding;
 
-	int rows = 5;
 	int cols = 4;
+	int rows = 6;
 
 	int cell_w = (buttons_width - (cols - 1) * padding) / cols;
 	int cell_h = (buttons_height - (rows - 1) * padding) / rows;
 
 	if (cell_w < 40) cell_w = 40;
-	if (cell_h < 30) cell_h = 30;
+	if (cell_h < 28) cell_h = 28;
 
-	int index = 0;
+	if (m_mode == CalcMode::Programmer) {
+		for (int i = 0; i < 6; i++) {
+			ShowWindow(m_buttons[i], SW_SHOW);
+			EnableWindow(m_buttons[i], m_number_base == NumberBase::Hex ? TRUE : FALSE);
+		}
+	}
+	else {
+		for (int i = 0; i < 6; i++) {
+			ShowWindow(m_buttons[i], SW_HIDE);
+		}
+	}
+
+	int hex_row_y = buttons_top;
+	MoveWindow(m_buttons[0], padding + 0 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[1], padding + 1 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[2], padding + 2 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[3], padding + 3 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+
+	int hex_row2_y = buttons_top + cell_h + padding;
+	MoveWindow(m_buttons[4], padding + 0 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[5], padding + 1 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
+
+	int normal_top = buttons_top + 2 * (cell_h + padding);
+
+	int index = 6;
 	for (int row = 0; row < 4; row++) {
 		for (int col = 0; col < 4; col++) {
 			int x = padding + col * (cell_w + padding);
-			int y = buttons_top + row * (cell_h + padding);
+			int y = normal_top + row * (cell_h + padding);
 			MoveWindow(m_buttons[index], x, y, cell_w, cell_h, TRUE);
 			index++;
 		}
 	}
 
-	int last_row_y = buttons_top + 4 * (cell_h + padding);
-	MoveWindow(m_buttons[16], padding, last_row_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[17], padding + cell_w + padding, last_row_y, buttons_width - cell_w - padding, cell_h, TRUE);
+	int last_row_y = normal_top + 4 * (cell_h + padding);
+	MoveWindow(m_buttons[22], padding, last_row_y, cell_w, cell_h, TRUE);
+	MoveWindow(m_buttons[23], padding + cell_w + padding, last_row_y, buttons_width - cell_w - padding, cell_h, TRUE);
 }
 
 LRESULT calculator::window_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
@@ -382,6 +413,13 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		create_buttons(window); //tworzymy przyciski
 		create_bit_hint(window);
 		sync_programmer_ui();
+
+		SendMessageW(m_type_combo, CB_SETCURSEL, static_cast<WPARAM>(m_data_type), 0);
+		SendMessageW(m_base_combo, CB_SETCURSEL, static_cast<WPARAM>(m_number_base), 0);
+
+		set_mode(m_mode);
+		apply_topmost_state();
+		update_all_displays();
 		return 0;
 	case WM_SIZE:
 	{
@@ -394,6 +432,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		DestroyWindow(window);
 		return 0;
 	case WM_DESTROY:
+		save_settings();
 		if (window == m_main)
 			PostQuitMessage(EXIT_SUCCESS);
 		return 0;
@@ -417,14 +456,26 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		}
 		break;
 	}
+	case WM_ACTIVATE:
+	{
+		m_window_active = (LOWORD(wparam) != WA_INACTIVE);
+		apply_inactive_transparency();
+		return 0;
+	}
 	case WM_COMMAND: //obsluga komend menu
 	{
 		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_BASE_COMBO) {
 			int sel = static_cast<int>(SendMessageW(m_base_combo, CB_GETCURSEL, 0, 0));
 			if (sel >= 0) {
 				m_number_base = static_cast<NumberBase>(sel);
+
+				RECT rect{};
+				GetClientRect(m_main, &rect);
+				resize_children(rect.right - rect.left, rect.bottom - rect.top);
+
 				m_result_text = format_value_by_base();
 				update_all_displays();
+				save_settings();
 			}
 			return 0;
 		}
@@ -442,6 +493,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				sync_bits_from_result_text();
 				m_result_text = format_value_by_base();
 				update_all_displays();
+				save_settings();
 			}
 			return 0;
 		}
@@ -456,6 +508,12 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			MessageBoxW(window, L"DevCalculator", L"About", MB_OK | MB_ICONINFORMATION);
 			return 0;
 
+			//always on top
+		case IDM_VIEW_ALWAYSONTOP:
+			toggle_always_on_top();
+			SetFocus(window);
+			return 0;
+
 		case IDM_EDIT_CLEAR:
 		{
 			m_history_text.clear();
@@ -465,6 +523,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_start_new_input = false;
 
 			update_all_displays();
+			save_settings();
 			SetFocus(window);
 			return 0;
 		}
@@ -566,6 +625,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_pending_operator = 0;
 			m_start_new_input = false;
 			update_all_displays();
+			save_settings();
 			SetFocus(window);
 			return 0;
 
@@ -577,6 +637,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 				m_result_text = L"0";
 
 			update_all_displays();
+			save_settings();
 			SetFocus(window);
 			return 0;
 
@@ -601,6 +662,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			}
 
 			update_all_displays();
+			save_settings();
 			SetFocus(window);
 			return 0;
 		}
@@ -613,7 +675,95 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			set_mode(CalcMode::Programmer);
 			SetFocus(window);
 			return 0;
+		case ID_BTN_A:
+		case ID_BTN_B:
+		case ID_BTN_C_HEX:
+		case ID_BTN_D:
+		case ID_BTN_E:
+		case ID_BTN_F:
+		{
+			if (m_number_base != NumberBase::Hex) {
+				SetFocus(window);
+				return 0;
+			}
+
+			wchar_t hex_digit = L'A';
+			switch (LOWORD(wparam)) {
+			case ID_BTN_A: hex_digit = L'A'; break;
+			case ID_BTN_B: hex_digit = L'B'; break;
+			case ID_BTN_C_HEX: hex_digit = L'C'; break;
+			case ID_BTN_D: hex_digit = L'D'; break;
+			case ID_BTN_E: hex_digit = L'E'; break;
+			case ID_BTN_F: hex_digit = L'F'; break;
+			}
+
+			append_digit_to_result(hex_digit);
+			update_all_displays();
+			SetFocus(window);
+			return 0;
 		}
+
+		case IDM_BASE_DEC:
+		{
+			m_number_base = NumberBase::Dec;
+			SendMessageW(m_base_combo, CB_SETCURSEL, (WPARAM)NumberBase::Dec, 0);
+
+			RECT rc{};
+			GetClientRect(m_main, &rc);
+			resize_children(rc.right - rc.left, rc.bottom - rc.top);
+
+			m_result_text = format_value_by_base();
+			update_all_displays();
+			save_settings();
+			return 0;
+		}
+
+		case IDM_BASE_HEX:
+		{
+			m_number_base = NumberBase::Hex;
+			SendMessageW(m_base_combo, CB_SETCURSEL, (WPARAM)NumberBase::Hex, 0);
+
+			RECT rc{};
+			GetClientRect(m_main, &rc);
+			resize_children(rc.right - rc.left, rc.bottom - rc.top);
+
+			m_result_text = format_value_by_base();
+			update_all_displays();
+			save_settings();
+			return 0;
+		}
+
+		case IDM_BASE_OCT:
+		{
+			m_number_base = NumberBase::Oct;
+			SendMessageW(m_base_combo, CB_SETCURSEL, (WPARAM)NumberBase::Oct, 0);
+
+			RECT rc{};
+			GetClientRect(m_main, &rc);
+			resize_children(rc.right - rc.left, rc.bottom - rc.top);
+
+			m_result_text = format_value_by_base();
+			update_all_displays();
+			save_settings();
+			return 0;
+		}
+
+		case IDM_BASE_BIN:
+		{
+			m_number_base = NumberBase::Bin;
+			SendMessageW(m_base_combo, CB_SETCURSEL, (WPARAM)NumberBase::Bin, 0);
+
+			RECT rc{};
+			GetClientRect(m_main, &rc);
+			resize_children(rc.right - rc.left, rc.bottom - rc.top);
+
+			m_result_text = format_value_by_base();
+			update_all_displays();
+			save_settings();
+			return 0;
+		}
+		}
+
 		return 0;
 	}
 	case WM_CHAR:
@@ -661,6 +811,9 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		}
 
 		else if ((ch >= L'A' && ch <= L'F') || (ch >= L'a' && ch <= L'f')) {
+			if (m_number_base != NumberBase::Hex)
+				return 0;
+
 			ch = towupper(ch);
 			append_digit_to_result(ch);
 		}
@@ -767,22 +920,31 @@ calculator::calculator(HINSTANCE instance)
 	m_bit_hint{},
 	m_base_combo{},
 	m_number_base{ NumberBase::Dec },
-	m_precision_warning{ L"" }
+	m_precision_warning{ L"" },
+	m_always_on_top{ false },
+	m_window_active{ true },
+	m_window_x{ CW_USEDEFAULT },
+	m_window_y{ 0 },
+	m_window_width{ 400 },
+	m_window_height{ 500 },
+	m_show_command{ SW_SHOWNORMAL },
+	m_config_path{}
 {
-	for (int i = 0; i < 18; i++) {
+	for (int i = 0; i < 24; i++) {
 		m_buttons[i] = nullptr;
 	}
 	register_class();
 	register_display_class();
 	register_bits_class();
 
+	load_settings();
 	m_main = create_window();
 	m_accel = LoadAcceleratorsW(m_instance, MAKEINTRESOURCEW(IDC_LABY32)); //ladowanie tabeli akceleratorow
 }
 
 int calculator::run(int show_command)
 {
-	ShowWindow(m_main, show_command);
+	ShowWindow(m_main, m_show_command == 0 ? show_command : m_show_command);
 	MSG msg{};
 	BOOL result = TRUE;
 	while ((result = GetMessageW(&msg, nullptr, 0, 0)) != 0)
@@ -933,6 +1095,7 @@ void calculator::set_mode(CalcMode mode) {
 	resize_children(rect.right - rect.left, rect.bottom - rect.top);
 
 	InvalidateRect(m_main, nullptr, TRUE);
+	save_settings();
 }
 
 void calculator::sync_programmer_ui() {
@@ -978,7 +1141,11 @@ std::wstring calculator::get_display_text() const {
 	}
 
 	case DataType::Half:
-		return L"0";
+	{
+		uint16_t raw = static_cast<uint16_t>(m_bits);
+		float f = half_to_float(raw);
+		return double_to_text(f);
+	}
 	}
 
 	return L"0";
@@ -1327,8 +1494,12 @@ void calculator::sync_bits_from_result_text() {
 	}
 
 	case DataType::Half:
-		m_bits = 0;
+	{
+		float f = static_cast<float>(std::wcstod(m_result_text.c_str(), nullptr));
+		uint16_t raw = float_to_half(f);
+		m_bits = raw;
 		break;
+	}
 	}
 }
 
@@ -1481,7 +1652,7 @@ bool calculator::is_input_char_allowed(wchar_t ch) const {
 }
 
 	bool calculator::should_show_precision_warning() const {
-		if (!(m_data_type == DataType::Float32 || m_data_type == DataType::Float64))
+		if (!(m_data_type == DataType::Half || m_data_type == DataType::Float32 || m_data_type == DataType::Float64))
 			return false;
 
 		if (m_number_base != NumberBase::Dec)
@@ -1492,6 +1663,13 @@ bool calculator::is_input_char_allowed(wchar_t ch) const {
 
 		try {
 			double entered = std::wcstod(m_result_text.c_str(), nullptr);
+			
+			if (m_data_type == DataType::Half) {
+				float entered_f = static_cast<float>(entered);
+				uint16_t h = float_to_half(entered_f);
+				float restored = half_to_float(h);
+				return static_cast<double>(restored) != entered;
+			}
 
 			if (m_data_type == DataType::Float32) {
 				float f = static_cast<float>(entered);
@@ -1513,6 +1691,13 @@ bool calculator::is_input_char_allowed(wchar_t ch) const {
 
 	void calculator::update_precision_warning() {
 		if (should_show_precision_warning()) {
+			if (m_data_type == DataType::Half) {
+				float f = static_cast<float>(std::wcstod(m_result_text.c_str(), nullptr));
+				uint16_t h = float_to_half(f);
+				float restored = half_to_float(h);
+				m_precision_warning = L"Precision Warning: stored as " + double_to_text(restored);
+			}
+
 			if (m_data_type == DataType::Float32) {
 				float f = static_cast<float>(std::wcstod(m_result_text.c_str(), nullptr));
 				m_precision_warning = L"Precision Warning: stored as " + double_to_text(f);
@@ -1656,4 +1841,222 @@ bool calculator::is_input_char_allowed(wchar_t ch) const {
 		else {
 			m_result_text += digit;
 		}
+	}
+
+	std::wstring calculator::get_config_path() const { //implementacja sciezki do config.ini
+		wchar_t path[MAX_PATH]{};
+		GetModuleFileNameW(nullptr, path, MAX_PATH);
+
+		std::wstring full = path;
+		size_t pos = full.find_last_of(L"\\/");
+		if (pos != std::wstring::npos) {
+			full = full.substr(0, pos + 1);
+		}
+		full += L"config.ini";
+		return full;
+	}
+
+	void calculator::load_settings() { //ladowanie ustawien
+		m_config_path = get_config_path();
+
+		m_window_x = GetPrivateProfileIntW(L"Window", L"X", CW_USEDEFAULT, m_config_path.c_str());
+		m_window_y = GetPrivateProfileIntW(L"Window", L"Y", CW_USEDEFAULT, m_config_path.c_str());
+		m_window_width = GetPrivateProfileIntW(L"Window", L"Width", 400, m_config_path.c_str());
+		m_window_height = GetPrivateProfileIntW(L"Window", L"Height", 500, m_config_path.c_str());
+		m_show_command = GetPrivateProfileIntW(L"Window", L"ShowCmd", SW_SHOWNORMAL, m_config_path.c_str());
+
+		m_always_on_top = GetPrivateProfileIntW(L"UI", L"AlwaysOnTop", 0, m_config_path.c_str()) != 0;
+		m_mode = static_cast<CalcMode>(GetPrivateProfileIntW(L"UI", L"Mode", static_cast<int>(CalcMode::Basic), m_config_path.c_str()));
+		m_data_type = static_cast<DataType>(GetPrivateProfileIntW(L"UI", L"DataType", static_cast<int>(DataType::Int32), m_config_path.c_str()));
+		m_number_base = static_cast<NumberBase>(GetPrivateProfileIntW(L"UI", L"NumberBase", static_cast<int>(NumberBase::Dec), m_config_path.c_str()));
+
+		wchar_t result_buf[256]{};
+		GetPrivateProfileStringW(L"UI", L"ResultText", L"0", result_buf, 256, m_config_path.c_str());
+		m_result_text = result_buf;
+
+		wchar_t history_buf[256]{};
+		GetPrivateProfileStringW(L"UI", L"HistoryText", L"", history_buf, 256, m_config_path.c_str());
+		m_history_text = history_buf;
+	}
+
+	void calculator::save_settings() const { //zapis ustawien
+		if (!m_main || !IsWindow(m_main)) return;
+
+		WINDOWPLACEMENT wp{};
+		wp.length = sizeof(wp);
+		GetWindowPlacement(m_main, &wp);
+
+		RECT rc = wp.rcNormalPosition;
+		int width = rc.right - rc.left;
+		int height = rc.bottom - rc.top;
+
+		wchar_t buf[64]{};
+
+		wsprintfW(buf, L"%d", rc.left);
+		WritePrivateProfileStringW(L"Window", L"X", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", rc.top);
+		WritePrivateProfileStringW(L"Window", L"Y", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", width);
+		WritePrivateProfileStringW(L"Window", L"Width", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", height);
+		WritePrivateProfileStringW(L"Window", L"Height", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", wp.showCmd);
+		WritePrivateProfileStringW(L"Window", L"ShowCmd", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", m_always_on_top ? 1 : 0);
+		WritePrivateProfileStringW(L"UI", L"AlwaysOnTop", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", static_cast<int>(m_mode));
+		WritePrivateProfileStringW(L"UI", L"Mode", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", static_cast<int>(m_data_type));
+		WritePrivateProfileStringW(L"UI", L"DataType", buf, m_config_path.c_str());
+
+		wsprintfW(buf, L"%d", static_cast<int>(m_number_base));
+		WritePrivateProfileStringW(L"UI", L"NumberBase", buf, m_config_path.c_str());
+
+		WritePrivateProfileStringW(L"UI", L"ResultText", m_result_text.c_str(), m_config_path.c_str());
+		WritePrivateProfileStringW(L"UI", L"HistoryText", m_history_text.c_str(), m_config_path.c_str());
+	}
+
+	void calculator::toggle_always_on_top() {
+		m_always_on_top = !m_always_on_top;
+		apply_topmost_state();
+		save_settings();
+	}
+
+	void calculator::apply_topmost_state() {
+		if (!m_main) return;
+
+		SetWindowPos(
+			m_main,
+			m_always_on_top ? HWND_TOPMOST : HWND_NOTOPMOST,
+			0, 0, 0, 0,
+			SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE
+		);
+
+		HMENU menu = GetMenu(m_main);
+		CheckMenuItem(
+			menu,
+			IDM_VIEW_ALWAYSONTOP,
+			MF_BYCOMMAND | (m_always_on_top ? MF_CHECKED : MF_UNCHECKED)
+		);
+
+		apply_inactive_transparency();
+	}
+
+	void calculator::apply_inactive_transparency() { //przezroczystosc dla niekatywnego okna
+		if (!m_main) return;
+
+		LONG_PTR exStyle = GetWindowLongPtrW(m_main, GWL_EXSTYLE);
+
+		if (m_always_on_top && !m_window_active) {
+			SetWindowLongPtrW(m_main, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+			SetLayeredWindowAttributes(m_main, 0, 190, LWA_ALPHA);
+		}
+		else {
+			SetWindowLongPtrW(m_main, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+			SetLayeredWindowAttributes(m_main, 0, 255, LWA_ALPHA);
+		}
+	}
+
+	float calculator::half_to_float(uint16_t h)
+	{
+		uint16_t sign = (h >> 15) & 0x1;
+		uint16_t exp = (h >> 10) & 0x1F;
+		uint16_t mant = h & 0x3FF;
+
+		uint32_t sign32 = static_cast<uint32_t>(sign) << 31;
+		uint32_t exp32 = 0;
+		uint32_t mant32 = 0;
+
+		if (exp == 0) {
+			if (mant == 0) {
+				exp32 = 0;
+				mant32 = 0;
+			}
+			else {
+				int e = -14;
+				while ((mant & 0x400) == 0) {
+					mant <<= 1;
+					--e;
+				}
+				mant &= 0x3FF;
+				exp32 = static_cast<uint32_t>(e + 127) << 23;
+				mant32 = static_cast<uint32_t>(mant) << 13;
+			}
+		}
+		else if (exp == 0x1F) {
+			exp32 = 0xFFu << 23;
+			mant32 = static_cast<uint32_t>(mant) << 13;
+		}
+		else {
+			exp32 = static_cast<uint32_t>(exp - 15 + 127) << 23;
+			mant32 = static_cast<uint32_t>(mant) << 13;
+		}
+
+		uint32_t bits = sign32 | exp32 | mant32;
+		float result = 0.0f;
+		std::memcpy(&result, &bits, sizeof(result));
+		return result;
+	}
+
+	uint16_t calculator::float_to_half(float f)
+	{
+		uint32_t bits = 0;
+		std::memcpy(&bits, &f, sizeof(bits));
+
+		uint32_t sign = (bits >> 31) & 0x1;
+		int32_t exp = static_cast<int32_t>((bits >> 23) & 0xFF);
+		uint32_t mant = bits & 0x7FFFFF;
+
+		uint16_t sign16 = static_cast<uint16_t>(sign << 15);
+
+		if (exp == 0xFF) {
+			if (mant == 0) {
+				return static_cast<uint16_t>(sign16 | 0x7C00);
+			}
+			return static_cast<uint16_t>(sign16 | 0x7C00 | (mant >> 13) | 1);
+		}
+
+		int32_t new_exp = exp - 127 + 15;
+
+		if (new_exp >= 0x1F) {
+			return static_cast<uint16_t>(sign16 | 0x7C00);
+		}
+
+		if (new_exp <= 0) {
+			if (new_exp < -10) {
+				return sign16;
+			}
+
+			mant |= 0x800000;
+			uint32_t shifted = mant >> (1 - new_exp + 13);
+
+			if ((mant >> (1 - new_exp + 12)) & 1) {
+				shifted++;
+			}
+
+			return static_cast<uint16_t>(sign16 | shifted);
+		}
+
+		uint16_t exp16 = static_cast<uint16_t>(new_exp << 10);
+		uint16_t mant16 = static_cast<uint16_t>(mant >> 13);
+
+		if (mant & 0x1000) {
+			mant16++;
+			if (mant16 == 0x400) {
+				mant16 = 0;
+				exp16 += 0x0400;
+				if (exp16 >= 0x7C00) {
+					exp16 = 0x7C00;
+				}
+			}
+		}
+
+		return static_cast<uint16_t>(sign16 | exp16 | mant16);
 	}

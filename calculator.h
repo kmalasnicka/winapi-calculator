@@ -74,7 +74,7 @@ private:
 	HACCEL m_accel; //uchwyt akceleratora
 	int m_hover_bit_index;
 
-	HWND m_buttons[18]; //tablica uchwytow do przyciskow
+	HWND m_buttons[24]; //tablica uchwytow do przyciskow
 
 	std::wstring m_history_text;
 	std::wstring m_result_text;
@@ -101,6 +101,8 @@ private:
 	std::wstring to_binary_string(uint64_t value, int bits) const;
 	std::wstring to_octal_string(uint64_t value) const;
 	std::wstring to_hex_string(uint64_t value) const;
+	static float half_to_float(uint16_t h);
+	static uint16_t float_to_half(float f);
 
 	bool should_show_precision_warning() const;
 	void update_precision_warning();
@@ -109,6 +111,22 @@ private:
 	bool is_valid_pasted_text(const std::wstring& text) const;
 	bool is_zero_text_for_current_base() const;
 	void append_digit_to_result(wchar_t digit);
+
+	bool m_always_on_top;
+	bool m_window_active;
+	int m_window_x;
+	int m_window_y;
+	int m_window_width;
+	int m_window_height;
+	int m_show_command;
+	std::wstring m_config_path;
+
+	void toggle_always_on_top();
+	void apply_topmost_state();
+	void apply_inactive_transparency();
+	void load_settings();
+	void save_settings() const;
+	std::wstring get_config_path() const;
 public:
 	calculator(HINSTANCE instance);
 	int run(int show_command);
