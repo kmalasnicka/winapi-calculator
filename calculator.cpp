@@ -6,6 +6,7 @@
 #include <cstring>
 #include <cmath>
 #include <limits>
+#include <cwctype>
 
 enum ButtonIds { //identyfikatory przyciskow
 	ID_BTN_7 = 2001,
@@ -37,11 +38,13 @@ struct DisplayState {
 	std::wstring result;
 	HFONT history_font;
 	HFONT result_font;
+	std::wstring warning;
+	HFONT warning_font;
 
-	DisplayState() : history_font(nullptr), result_font(nullptr) {}
+	DisplayState() : history_font(nullptr), result_font(nullptr), warning_font(nullptr) {}
 };
 
-void update_display(HWND display, const std::wstring& history, const std::wstring& result);
+void update_display(HWND display, const std::wstring& history, const std::wstring& result, const std::wstring& warning);
 double text_to_double(const std::wstring& text);
 std::wstring double_to_text(double value);
 double calculate(double left, double right, wchar_t op);
@@ -103,6 +106,7 @@ void calculator::create_display(HWND parent) {
 	auto* state = new DisplayState();
 	state->history = m_history_text;
 	state->result = m_result_text;
+	state->warning = m_precision_warning;
 	SetWindowLongPtrW(m_display, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
 }
 
@@ -151,23 +155,30 @@ void calculator::resize_children(int width, int height) {
 	int top_after_display = display_y + display_h + padding;
 
 	int buttons_top = top_after_display;
-
 	if (m_mode == CalcMode::Programmer) {
 		int bits_h = 70;
 		int combo_visible_h = 28;
 		int combo_total_h = 200;
+		int combo_gap = 5;
 
 		ShowWindow(m_bits_display, SW_SHOW);
 		ShowWindow(m_type_combo, SW_SHOW);
+		ShowWindow(m_base_combo, SW_SHOW);
 
 		MoveWindow(m_bits_display, padding, top_after_display, width - 2 * padding, bits_h, TRUE);
-		MoveWindow(m_type_combo, padding, top_after_display + bits_h + padding, width - 2 * padding, combo_total_h, TRUE);
 
-		buttons_top = top_after_display + bits_h + padding + combo_visible_h + padding;
+		int combo_y = top_after_display + bits_h + padding;
+		int combo_w = (width - 3 * padding) / 2;
+
+		MoveWindow(m_type_combo, padding, combo_y, combo_w, combo_total_h, TRUE);
+		MoveWindow(m_base_combo, padding + combo_w + padding, combo_y, combo_w, combo_total_h, TRUE);
+
+		buttons_top = combo_y + combo_visible_h + padding;
 	}
 	else {
 		ShowWindow(m_bits_display, SW_HIDE);
 		ShowWindow(m_type_combo, SW_HIDE);
+		ShowWindow(m_base_combo, SW_HIDE);
 	}
 
 	int buttons_height = height - buttons_top - padding;
@@ -260,6 +271,21 @@ LRESULT CALLBACK calculator::display_proc_static(HWND window, UINT message, WPAR
 			CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
 			DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
 
+		if (state->warning_font) {
+			DeleteObject(state->warning_font);
+			state->warning_font = nullptr;
+		}
+
+		int warning_font_height = height / 12;
+		if (warning_font_height < 9) warning_font_height = 9;
+
+		state->warning_font = CreateFontW(
+			-warning_font_height, 0, 0, 0,
+			FW_NORMAL, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS,
+			CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
+			DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+
 		InvalidateRect(window, nullptr, TRUE);
 		return 0;
 	}
@@ -288,6 +314,12 @@ LRESULT CALLBACK calculator::display_proc_static(HWND window, UINT message, WPAR
 		result_rect.top = history_rect.bottom;
 		result_rect.bottom -= 8;
 
+		RECT warning_rect = rect;
+		warning_rect.left += 10;
+		warning_rect.right -= 10;
+		warning_rect.bottom -= 4;
+		warning_rect.top = rect.bottom - (rect.bottom - rect.top) / 4;
+
 		if (state && state->history_font) {
 			SelectObject(hdc, state->history_font);
 			SetTextColor(hdc, RGB(120, 120, 120));
@@ -296,6 +328,17 @@ LRESULT CALLBACK calculator::display_proc_static(HWND window, UINT message, WPAR
 				state->history.c_str(),
 				-1,
 				&history_rect,
+				DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+		}
+
+		if (state && state->warning_font && !state->warning.empty()) {
+			SelectObject(hdc, state->warning_font);
+			SetTextColor(hdc, RGB(200, 0, 0));
+			DrawTextW(
+				hdc,
+				state->warning.c_str(),
+				-1,
+				&warning_rect,
 				DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
 		}
 
@@ -319,6 +362,7 @@ LRESULT CALLBACK calculator::display_proc_static(HWND window, UINT message, WPAR
 		if (state) {
 			if (state->history_font) DeleteObject(state->history_font);
 			if (state->result_font) DeleteObject(state->result_font);
+			if (state->warning_font) DeleteObject(state->warning_font);
 			delete state;
 			SetWindowLongPtrW(window, GWLP_USERDATA, 0);
 		}
@@ -360,16 +404,48 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		mmi->ptMinTrackSize.y = 400;
 		return 0;
 	}
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdc = reinterpret_cast<HDC>(wparam);
+		HWND ctrl = reinterpret_cast<HWND>(lparam);
+
+		if (ctrl == m_bit_hint) {
+			SetTextColor(hdc, RGB(0, 0, 0));
+			SetBkColor(hdc, RGB(255, 255, 210));
+			static HBRUSH hintBrush = CreateSolidBrush(RGB(255, 255, 210));
+			return reinterpret_cast<LRESULT>(hintBrush);
+		}
+		break;
+	}
 	case WM_COMMAND: //obsluga komend menu
 	{
-		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_TYPE_COMBO) {
-			int sel = static_cast<int>(SendMessageW(m_type_combo, CB_GETCURSEL, 0, 0));
+		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_BASE_COMBO) {
+			int sel = static_cast<int>(SendMessageW(m_base_combo, CB_GETCURSEL, 0, 0));
 			if (sel >= 0) {
-				m_data_type = static_cast<DataType>(sel);
+				m_number_base = static_cast<NumberBase>(sel);
+				m_result_text = format_value_by_base();
 				update_all_displays();
 			}
 			return 0;
 		}
+
+		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_TYPE_COMBO) {
+			int sel = static_cast<int>(SendMessageW(m_type_combo, CB_GETCURSEL, 0, 0));
+			if (sel >= 0) {
+				m_data_type = static_cast<DataType>(sel);
+
+				if (is_float_type()) {
+					m_number_base = NumberBase::Dec;
+					SendMessageW(m_base_combo, CB_SETCURSEL, static_cast<WPARAM>(0), 0);
+				}
+
+				sync_bits_from_result_text();
+				m_result_text = format_value_by_base();
+				update_all_displays();
+			}
+			return 0;
+		}
+
 		switch (LOWORD(wparam))
 		{
 		case IDM_EXIT:
@@ -391,19 +467,6 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			update_all_displays();
 			SetFocus(window);
 			return 0;
-		}
-		case WM_CTLCOLORSTATIC:
-		{
-			HDC hdc = reinterpret_cast<HDC>(wparam);
-			HWND ctrl = reinterpret_cast<HWND>(lparam);
-
-			if (ctrl == m_bit_hint) {
-				SetTextColor(hdc, RGB(0, 0, 0));
-				SetBkColor(hdc, RGB(255, 255, 210));
-				static HBRUSH hintBrush = CreateSolidBrush(RGB(255, 255, 210));
-				return reinterpret_cast<LRESULT>(hintBrush);
-			}
-			break;
 		}
 		case ID_BTN_0:
 		case ID_BTN_1:
@@ -430,14 +493,12 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			default:       digit = L'9'; break;
 			}
 
-			if (m_start_new_input || m_result_text == L"0") {
-				m_result_text = std::wstring(1, digit);
-				m_start_new_input = false;
-			}
-			else {
-				m_result_text += digit;
+			if (!is_float_type() && !is_input_char_allowed(digit)) {
+				SetFocus(window);
+				return 0;
 			}
 
+			append_digit_to_result(digit);
 			update_all_displays();
 			SetFocus(window);
 			return 0;
@@ -481,6 +542,11 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		}
 
 		case ID_BTN_DOT:
+			if (!is_float_type()) {
+				SetFocus(window);
+				return 0;
+			}
+
 			if (m_start_new_input) {
 				m_result_text = L"0.";
 				m_start_new_input = false;
@@ -554,14 +620,13 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	{
 		wchar_t ch = (wchar_t)wparam;
 
+		if (!is_float_type()) {
+			if (!is_input_char_allowed(ch))
+				return 0;
+		}
+
 		if (ch >= L'0' && ch <= L'9') {
-			if (m_start_new_input || m_result_text == L"0") {
-				m_result_text = std::wstring(1, ch);
-				m_start_new_input = false;
-			}
-			else {
-				m_result_text += ch;
-			}
+			append_digit_to_result(ch);
 		}
 
 		else if (ch == L'.') {
@@ -595,25 +660,42 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 			m_start_new_input = true;
 		}
 
+		else if ((ch >= L'A' && ch <= L'F') || (ch >= L'a' && ch <= L'f')) {
+			ch = towupper(ch);
+			append_digit_to_result(ch);
+		}
+
 		update_all_displays();
 		return 0;
 	}
 	case WM_KEYDOWN:
 	{
 		switch (wparam)
-		{
-		case '1':
+		{;
+		case 'C':
 			if (GetKeyState(VK_CONTROL) < 0) {
-				set_mode(CalcMode::Basic);
-				update_all_displays();
+				copy_text_to_clipboard(m_result_text);
 				return 0;
 			}
 			break;
 
-		case '2':
+		case 'V':
 			if (GetKeyState(VK_CONTROL) < 0) {
-				set_mode(CalcMode::Programmer);
-				update_all_displays();
+				std::wstring pasted;
+				if (paste_text_from_clipboard(pasted) && is_valid_pasted_text(pasted)) {
+					if ((m_number_base == NumberBase::Hex) && !pasted.empty()) {
+						for (wchar_t& ch : pasted) {
+							if (ch >= L'a' && ch <= L'f')
+								ch = towupper(ch);
+						}
+					}
+					m_result_text = pasted;
+					m_start_new_input = false;
+					update_all_displays();
+				}
+				else {
+					MessageBoxW(window, L"Clipboard does not contain a valid numeric value.", L"Paste Error", MB_OK | MB_ICONWARNING);
+				}
 				return 0;
 			}
 			break;
@@ -682,7 +764,10 @@ calculator::calculator(HINSTANCE instance)
 	m_data_type{ DataType::Int32 },
 	m_bits{ 0 },
 	m_hover_bit_index{ -1 },
-	m_bit_hint{}
+	m_bit_hint{},
+	m_base_combo{},
+	m_number_base{ NumberBase::Dec },
+	m_precision_warning{ L"" }
 {
 	for (int i = 0; i < 18; i++) {
 		m_buttons[i] = nullptr;
@@ -711,11 +796,12 @@ int calculator::run(int show_command)
 	return EXIT_SUCCESS;
 }
 
-void update_display(HWND display, const std::wstring& history, const std::wstring& result) {
+void update_display(HWND display, const std::wstring& history, const std::wstring& result, const std::wstring& warning) {
 	auto* state = reinterpret_cast<DisplayState*>(GetWindowLongPtrW(display, GWLP_USERDATA));
 	if (state) {
 		state->history = history;
 		state->result = result;
+		state->warning = warning;
 	}
 	InvalidateRect(display, nullptr, TRUE);
 }
@@ -789,6 +875,20 @@ void calculator::create_programmer_controls(HWND parent) {
 		nullptr
 	);
 
+	m_base_combo = CreateWindowExW(
+		0,
+		L"COMBOBOX",
+		nullptr,
+		WS_CHILD | WS_VISIBLE | WS_VSCROLL | CBS_DROPDOWNLIST,
+		0, 0, 0, 0,
+		parent,
+		reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_BASE_COMBO)),
+		m_instance,
+		nullptr
+	);
+
+	populate_base_combo();
+
 	populate_type_combo();
 }
 
@@ -839,6 +939,7 @@ void calculator::sync_programmer_ui() {
 	BOOL show = (m_mode == CalcMode::Programmer) ? TRUE : FALSE;
 	ShowWindow(m_bits_display, show ? SW_SHOW : SW_HIDE);
 	ShowWindow(m_type_combo, show ? SW_SHOW : SW_HIDE);
+	ShowWindow(m_base_combo, show ? SW_SHOW : SW_HIDE);
 }
 
 std::wstring calculator::get_display_text() const {
@@ -885,7 +986,8 @@ std::wstring calculator::get_display_text() const {
 
 void calculator::update_all_displays() {
 	sync_bits_from_result_text();
-	update_display(m_display, m_history_text, m_result_text);
+	update_precision_warning();
+	update_display(m_display, m_history_text, m_result_text, m_precision_warning);
 	InvalidateRect(m_bits_display, nullptr, TRUE);
 }
 
@@ -1113,7 +1215,7 @@ void calculator::toggle_bit(int bit_index) { //klikanie bitow
 	m_bits ^= (1ULL << shift);
 
 	if (m_mode == CalcMode::Programmer) {
-		m_result_text = get_display_text();
+		m_result_text = format_value_by_base();
 		update_all_displays();
 	}
 }
@@ -1154,30 +1256,56 @@ void calculator::sync_bits_from_result_text() {
 	if (m_result_text.empty() || m_result_text == L"-" || m_result_text == L"." || m_result_text == L"-.")
 		return;
 
+	std::wstring text = m_result_text;
+	int base = 10;
+
+	if (!is_float_type()) {
+		switch (m_number_base) {
+		case NumberBase::Dec:
+			base = 10;
+			break;
+		case NumberBase::Hex:
+			base = 16;
+			if (text.rfind(L"0x", 0) == 0 || text.rfind(L"0X", 0) == 0)
+				text = text.substr(2);
+			break;
+		case NumberBase::Oct:
+			base = 8;
+			if (!text.empty() && (text[0] == L'o' || text[0] == L'O'))
+				text = text.substr(1);
+			break;
+		case NumberBase::Bin:
+			base = 2;
+			if (!text.empty() && (text[0] == L'b' || text[0] == L'B'))
+				text = text.substr(1);
+			break;
+		}
+	}
+
 	switch (m_data_type) {
 	case DataType::Int8:
-		m_bits = static_cast<uint8_t>(static_cast<int8_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		m_bits = static_cast<uint8_t>(static_cast<int8_t>(std::wcstoll(text.c_str(), nullptr, base)));
 		break;
 	case DataType::UInt8:
-		m_bits = static_cast<uint8_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		m_bits = static_cast<uint8_t>(std::wcstoull(text.c_str(), nullptr, base));
 		break;
 	case DataType::Int16:
-		m_bits = static_cast<uint16_t>(static_cast<int16_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		m_bits = static_cast<uint16_t>(static_cast<int16_t>(std::wcstoll(text.c_str(), nullptr, base)));
 		break;
 	case DataType::UInt16:
-		m_bits = static_cast<uint16_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		m_bits = static_cast<uint16_t>(std::wcstoull(text.c_str(), nullptr, base));
 		break;
 	case DataType::Int32:
-		m_bits = static_cast<uint32_t>(static_cast<int32_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		m_bits = static_cast<uint32_t>(static_cast<int32_t>(std::wcstoll(text.c_str(), nullptr, base)));
 		break;
 	case DataType::UInt32:
-		m_bits = static_cast<uint32_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		m_bits = static_cast<uint32_t>(std::wcstoull(text.c_str(), nullptr, base));
 		break;
 	case DataType::Int64:
-		m_bits = static_cast<uint64_t>(static_cast<int64_t>(std::wcstoll(m_result_text.c_str(), nullptr, 10)));
+		m_bits = static_cast<uint64_t>(static_cast<int64_t>(std::wcstoll(text.c_str(), nullptr, base)));
 		break;
 	case DataType::UInt64:
-		m_bits = static_cast<uint64_t>(std::wcstoull(m_result_text.c_str(), nullptr, 10));
+		m_bits = static_cast<uint64_t>(std::wcstoull(text.c_str(), nullptr, base));
 		break;
 
 	case DataType::Float32:
@@ -1248,3 +1376,284 @@ void calculator::hide_bit_hint() {
 		ShowWindow(m_bit_hint, SW_HIDE);
 	}
 }
+
+void calculator::populate_base_combo() {
+	const wchar_t* items[] = {
+		L"Dec",
+		L"Hex",
+		L"Oct",
+		L"Bin"
+	};
+
+	for (const auto* item : items) {
+		SendMessageW(m_base_combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(item));
+	}
+
+	SendMessageW(m_base_combo, CB_SETCURSEL, static_cast<WPARAM>(0), 0);
+}
+
+std::wstring calculator::to_binary_string(uint64_t value, int bits) const {
+	if (value == 0) return L"b0";
+
+	std::wstring result = L"b";
+	bool started = false;
+
+	for (int i = bits - 1; i >= 0; --i) {
+		bool bit = ((value >> i) & 1ULL) != 0;
+
+		if (bit) {
+			started = true;
+		}
+
+		if (started) {
+			result += bit ? L'1' : L'0';
+		}
+	}
+
+	return result;
+}
+
+std::wstring calculator::to_octal_string(uint64_t value) const {
+	if (value == 0) return L"o0";
+
+	std::wstring digits;
+	while (value > 0) {
+		digits.insert(digits.begin(), wchar_t(L'0' + (value % 8)));
+		value /= 8;
+	}
+	return L"o" + digits;
+}
+
+std::wstring calculator::to_hex_string(uint64_t value) const {
+	if (value == 0) return L"0x0";
+
+	const wchar_t* hex = L"0123456789ABCDEF";
+	std::wstring digits;
+	while (value > 0) {
+		digits.insert(digits.begin(), hex[value & 0xF]);
+		value >>= 4;
+	}
+	return L"0x" + digits;
+}
+
+std::wstring calculator::format_value_by_base() const {
+	if (is_float_type()) {
+		return get_display_text();
+	}
+
+	uint64_t raw = m_bits;
+	int bits = get_visible_bit_count();
+
+	switch (m_number_base) {
+	case NumberBase::Dec:
+		return get_display_text();
+	case NumberBase::Hex:
+		return to_hex_string(raw);
+	case NumberBase::Oct:
+		return to_octal_string(raw);
+	case NumberBase::Bin:
+		return to_binary_string(raw, bits);
+	}
+
+	return get_display_text();
+}
+
+bool calculator::is_input_char_allowed(wchar_t ch) const {
+	switch (m_number_base) {
+	case NumberBase::Dec:
+		if (is_float_type()) {
+			return (ch >= L'0' && ch <= L'9') || ch == L'.' || ch == L'-';
+		}
+		return (ch >= L'0' && ch <= L'9') || ch == L'-';
+
+	case NumberBase::Hex:
+		return (ch >= L'0' && ch <= L'9') ||
+			(ch >= L'a' && ch <= L'f') ||
+			(ch >= L'A' && ch <= L'F');
+
+	case NumberBase::Oct:
+		return (ch >= L'0' && ch <= L'7');
+
+	case NumberBase::Bin:
+		return ch == L'0' || ch == L'1';
+	}
+	return false;
+}
+
+	bool calculator::should_show_precision_warning() const {
+		if (!(m_data_type == DataType::Float32 || m_data_type == DataType::Float64))
+			return false;
+
+		if (m_number_base != NumberBase::Dec)
+			return false;
+
+		if (m_result_text.empty())
+			return false;
+
+		try {
+			double entered = std::wcstod(m_result_text.c_str(), nullptr);
+
+			if (m_data_type == DataType::Float32) {
+				float f = static_cast<float>(entered);
+				return static_cast<double>(f) != entered;
+			}
+
+			if (m_data_type == DataType::Float64) {
+				double d = entered;
+				long double ld = std::wcstold(m_result_text.c_str(), nullptr);
+				return static_cast<long double>(d) != ld;
+			}
+		}
+		catch (...) {
+			return false;
+		}
+
+		return false;
+	}
+
+	void calculator::update_precision_warning() {
+		if (should_show_precision_warning()) {
+			if (m_data_type == DataType::Float32) {
+				float f = static_cast<float>(std::wcstod(m_result_text.c_str(), nullptr));
+				m_precision_warning = L"Precision Warning: stored as " + double_to_text(f);
+			}
+			else if (m_data_type == DataType::Float64) {
+				double d = std::wcstod(m_result_text.c_str(), nullptr);
+				m_precision_warning = L"Precision Warning: stored as " + double_to_text(d);
+			}
+		}
+		else {
+			m_precision_warning.clear();
+		}
+	}
+
+	bool calculator::copy_text_to_clipboard(const std::wstring& text) {
+		if (!OpenClipboard(m_main)) return false;
+		EmptyClipboard();
+
+		size_t bytes = (text.size() + 1) * sizeof(wchar_t);
+		HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, bytes);
+		if (!hMem) {
+			CloseClipboard();
+			return false;
+		}
+
+		void* ptr = GlobalLock(hMem);
+		std::memcpy(ptr, text.c_str(), bytes);
+		GlobalUnlock(hMem);
+
+		SetClipboardData(CF_UNICODETEXT, hMem);
+		CloseClipboard();
+		return true;
+	}
+
+	bool calculator::paste_text_from_clipboard(std::wstring& out) {
+		if (!OpenClipboard(m_main)) return false;
+
+		HANDLE hData = GetClipboardData(CF_UNICODETEXT);
+		if (!hData) {
+			CloseClipboard();
+			return false;
+		}
+
+		wchar_t* text = static_cast<wchar_t*>(GlobalLock(hData));
+		if (!text) {
+			CloseClipboard();
+			return false;
+		}
+
+		out = text;
+		GlobalUnlock(hData);
+		CloseClipboard();
+		return true;
+	}
+
+	bool calculator::is_valid_pasted_text(const std::wstring& text) const {
+		if (text.empty())
+			return false;
+
+		std::wstring s = text;
+
+		if (is_float_type()) {
+			wchar_t* end = nullptr;
+			std::wcstod(s.c_str(), &end);
+			return end != s.c_str() && *end == L'\0';
+		}
+
+		if (m_number_base == NumberBase::Hex) {
+			if (s.rfind(L"0x", 0) == 0 || s.rfind(L"0X", 0) == 0)
+				s = s.substr(2);
+			if (s.empty()) return false;
+			for (wchar_t ch : s) {
+				if (!((ch >= L'0' && ch <= L'9') || (ch >= L'a' && ch <= L'f') || (ch >= L'A' && ch <= L'F')))
+					return false;
+			}
+			return true;
+		}
+
+		if (m_number_base == NumberBase::Oct) {
+			if (!s.empty() && (s[0] == L'o' || s[0] == L'O'))
+				s = s.substr(1);
+			if (s.empty()) return false;
+			for (wchar_t ch : s) {
+				if (!(ch >= L'0' && ch <= L'7'))
+					return false;
+			}
+			return true;
+		}
+
+		if (m_number_base == NumberBase::Bin) {
+			if (!s.empty() && (s[0] == L'b' || s[0] == L'B'))
+				s = s.substr(1);
+			if (s.empty()) return false;
+			for (wchar_t ch : s) {
+				if (!(ch == L'0' || ch == L'1'))
+					return false;
+			}
+			return true;
+		}
+
+		wchar_t* end = nullptr;
+		std::wcstoll(s.c_str(), &end, 10);
+		return end != s.c_str() && *end == L'\0';
+	}
+
+	bool calculator::is_zero_text_for_current_base() const {
+		switch (m_number_base) {
+		case NumberBase::Dec:
+			return m_result_text == L"0";
+		case NumberBase::Hex:
+			return m_result_text == L"0x0" || m_result_text == L"0X0";
+		case NumberBase::Oct:
+			return m_result_text == L"o0" || m_result_text == L"O0";
+		case NumberBase::Bin:
+			return m_result_text == L"b0" || m_result_text == L"B0";
+		}
+		return m_result_text == L"0";
+	}
+
+	void calculator::append_digit_to_result(wchar_t digit) {
+		if (m_start_new_input || is_zero_text_for_current_base()) {
+			switch (m_number_base) {
+			case NumberBase::Dec:
+				m_result_text = std::wstring(1, digit);
+				break;
+			case NumberBase::Hex:
+				m_result_text = L"0x";
+				m_result_text += digit;
+				break;
+			case NumberBase::Oct:
+				m_result_text = L"o";
+				m_result_text += digit;
+				break;
+			case NumberBase::Bin:
+				m_result_text = L"b";
+				m_result_text += digit;
+				break;
+			}
+			m_start_new_input = false;
+		}
+		else {
+			m_result_text += digit;
+		}
+	}

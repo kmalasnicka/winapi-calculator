@@ -22,6 +22,7 @@
 
 #define IDC_TYPE_COMBO          4001
 #define IDC_BITS_VIEW           4002
+#define IDC_BASE_COMBO 3003
 #endif
 // Next default values for new objects
 //

@@ -22,6 +22,13 @@ enum class DataType {
 	Float64
 };
 
+enum class NumberBase {
+	Dec,
+	Hex,
+	Oct,
+	Bin
+};
+
 class calculator
 {
 private:
@@ -83,6 +90,25 @@ private:
 	void create_bit_hint(HWND parent);
 	void show_bit_hint(const std::wstring& text, POINT screen_pt);
 	void hide_bit_hint();
+
+	HWND m_base_combo;
+	NumberBase m_number_base;
+	std::wstring m_precision_warning;
+
+	void populate_base_combo();
+	std::wstring format_value_by_base() const;
+	bool is_input_char_allowed(wchar_t ch) const;
+	std::wstring to_binary_string(uint64_t value, int bits) const;
+	std::wstring to_octal_string(uint64_t value) const;
+	std::wstring to_hex_string(uint64_t value) const;
+
+	bool should_show_precision_warning() const;
+	void update_precision_warning();
+	bool copy_text_to_clipboard(const std::wstring& text);
+	bool paste_text_from_clipboard(std::wstring& out);
+	bool is_valid_pasted_text(const std::wstring& text) const;
+	bool is_zero_text_for_current_base() const;
+	void append_digit_to_result(wchar_t digit);
 public:
 	calculator(HINSTANCE instance);
 	int run(int show_command);
