@@ -1,4 +1,4 @@
-#include "calculator.h"
+﻿#include "calculator.h"
 #include "Resource.h"
 #include <windowsx.h>
 #include <stdexcept>
@@ -156,13 +156,14 @@ void calculator::resize_children(int width, int height) {
 	int display_y = padding;
 	int display_w = width - 2 * padding;
 	int display_h = height / 4;
+
 	if (display_h < 60) display_h = 60;
 
 	MoveWindow(m_display, display_x, display_y, display_w, display_h, TRUE);
 
 	int top_after_display = display_y + display_h + padding;
-
 	int buttons_top = top_after_display;
+
 	if (m_mode == CalcMode::Programmer) {
 		int bits_h = 70;
 		int combo_visible_h = 28;
@@ -192,7 +193,10 @@ void calculator::resize_children(int width, int height) {
 	int buttons_width = width - 2 * padding;
 
 	int cols = 4;
-	int rows = 6;
+
+	// Basic ma tylko 5 widocznych rzędów przycisków.
+	// Programmer ma 2 dodatkowe rzędy A-F, czyli razem 7.
+	int rows = (m_mode == CalcMode::Programmer) ? 7 : 5;
 
 	int cell_w = (buttons_width - (cols - 1) * padding) / cols;
 	int cell_h = (buttons_height - (rows - 1) * padding) / rows;
@@ -200,43 +204,59 @@ void calculator::resize_children(int width, int height) {
 	if (cell_w < 40) cell_w = 40;
 	if (cell_h < 28) cell_h = 28;
 
+	int normal_top = buttons_top;
+
 	if (m_mode == CalcMode::Programmer) {
 		for (int i = 0; i < 6; i++) {
 			ShowWindow(m_buttons[i], SW_SHOW);
 			EnableWindow(m_buttons[i], m_number_base == NumberBase::Hex ? TRUE : FALSE);
 		}
+
+		int hex_row_y = buttons_top;
+
+		MoveWindow(m_buttons[0], padding + 0 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+		MoveWindow(m_buttons[1], padding + 1 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+		MoveWindow(m_buttons[2], padding + 2 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+		MoveWindow(m_buttons[3], padding + 3 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
+
+		int hex_row2_y = buttons_top + cell_h + padding;
+
+		MoveWindow(m_buttons[4], padding + 0 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
+		MoveWindow(m_buttons[5], padding + 1 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
+
+		normal_top = buttons_top + 2 * (cell_h + padding);
 	}
 	else {
 		for (int i = 0; i < 6; i++) {
 			ShowWindow(m_buttons[i], SW_HIDE);
 		}
+
+		normal_top = buttons_top;
 	}
 
-	int hex_row_y = buttons_top;
-	MoveWindow(m_buttons[0], padding + 0 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[1], padding + 1 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[2], padding + 2 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[3], padding + 3 * (cell_w + padding), hex_row_y, cell_w, cell_h, TRUE);
-
-	int hex_row2_y = buttons_top + cell_h + padding;
-	MoveWindow(m_buttons[4], padding + 0 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[5], padding + 1 * (cell_w + padding), hex_row2_y, cell_w, cell_h, TRUE);
-
-	int normal_top = buttons_top + 2 * (cell_h + padding);
-
 	int index = 6;
+
 	for (int row = 0; row < 4; row++) {
 		for (int col = 0; col < 4; col++) {
 			int x = padding + col * (cell_w + padding);
 			int y = normal_top + row * (cell_h + padding);
+
 			MoveWindow(m_buttons[index], x, y, cell_w, cell_h, TRUE);
 			index++;
 		}
 	}
 
 	int last_row_y = normal_top + 4 * (cell_h + padding);
+
 	MoveWindow(m_buttons[22], padding, last_row_y, cell_w, cell_h, TRUE);
-	MoveWindow(m_buttons[23], padding + cell_w + padding, last_row_y, buttons_width - cell_w - padding, cell_h, TRUE);
+	MoveWindow(
+		m_buttons[23],
+		padding + cell_w + padding,
+		last_row_y,
+		buttons_width - cell_w - padding,
+		cell_h,
+		TRUE
+	);
 }
 
 LRESULT calculator::window_proc_static(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {

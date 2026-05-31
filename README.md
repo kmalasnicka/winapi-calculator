@@ -1,131 +1,57 @@
-# Programming in Graphical Environment 
+# DevCalculator – WinAPI Calculator
 
-## Laboratory Task - WinAPI 3 - DevCalculator (Basic)
+DevCalculator is a desktop calculator application written in C++ using the WinAPI library.  
+The program was created as a native Windows application, without using ready-made graphical frameworks. The window, buttons, menus, display area and user interactions are handled directly with WinAPI mechanisms.
 
-### 1. Introduction
-Your task is to create a classic desktop calculator window using pure WinAPI. In this laboratory part, you will implement the **"Basic"** mode, focusing on UI layout, custom GDI rendering, and standard arithmetic logic.
+The goal of the project was to create a functional calculator with two working modes: a standard calculator mode and a programmer mode. The application allows the user to perform basic arithmetic operations, work with different number systems, inspect binary representation of values and interact with the calculator using both mouse and keyboard.
 
----
+## Project Description
 
-### 2. Requirements
+The application is divided into two main modes.
 
-#### Main Application Window:
-- Must have a title bar, system menu, and support for minimization, maximization, and smooth resizing.
-- Use a **custom icon** instead of the default Win32 icon.
-- Enforce a **minimum window size** (e.g., 320x400 pixels).
-- Smooth and proportional scaling of all UI elements during resizing.
-- **Main Menu**:
-    - **Mode**: "Basic" (checked) and "Programmer" (should currently display a MessageBox: "Not implemented yet").
-    - **Edit**: "Clear" (shortcut: *Esc*).
-- Full keyboard support (digits, operators, Enter, Esc, Backspace).
+The first mode is the basic calculator mode. It provides the most common arithmetic operations, such as addition, subtraction, multiplication and division. The user can enter numbers, perform calculations, clear the current value, delete the last digit and display the result. The calculator also keeps a simple operation history, so the user can see the expression that is currently being calculated.
 
-#### UI Layout:
-- Dynamic creation of standard `BUTTON` controls for digits and operators.
-- The display occupies the top 1/4 of the window; buttons occupy the remaining space arranged in a grid.
-- Constant **5-pixel padding** between all elements and window edges.
-- The "=" button in the bottom row must span the remaining available width.
+The second mode is the programmer calculator mode. This mode extends the standard calculator with features useful when working with low-level numeric values. The user can switch between decimal, hexadecimal, octal and binary representation. The same value can therefore be viewed in different number systems. This makes the calculator useful for tasks connected with programming, bit operations and numeric conversions.
 
-#### Custom Display Control (GDI):
-- Instead of standard controls, create a separate window class via `RegisterClassEx`.
-- White background.
-- Right-aligned text rendering:
-    - Top: Smaller, dark gray operation history.
-    - Bottom: Larger, black, bold current input or result.
-- Dynamic font sizing updated only in response to `WM_SIZE`.
+In programmer mode, the application also displays a bit representation of the current value. The user can inspect individual bits and change them directly. The value shown by the calculator is then updated according to the selected numeric base and data type. This part of the application shows how binary data can be represented visually in a desktop program.
 
----
+The calculator supports several data types. This allows the user to check how values are represented depending on the selected type. It is especially useful in programmer mode, where the size and interpretation of the value affect the visible bit representation.
 
-### 3. Scoring (8 pts)
-- **1 pt.** Correct enforcement of the minimum main window size.
-- **1 pt.** Implemented menu with shortcuts (Accelerator table).
-- **2 pts.** Custom display control drawing history/result using GDI with dynamic fonts.
-- **2 pts.** Scalable grid layout for buttons with constant padding.
-- **2 pts.** Correct handling of numeric/character keyboard input and focus management.
+## User Interface
 
----
+The interface consists of a custom display area, a grid of calculator buttons, menu options and additional controls available in programmer mode.
 
-### 4. Technical Hints
+The display area is drawn manually using GDI. It shows the current value and the operation history. The calculator buttons are standard WinAPI controls, but their layout is adjusted dynamically when the window size changes.
 
-#### UI Management:
-- To enforce minimum size, handle the `WM_GETMINMAXINFO` message.
-- Use `BeginDeferWindowPos`, `DeferWindowPos`, and `EndDeferWindowPos` for optimal bulk movement of buttons during `WM_SIZE`.
-- Use `SetFocus` to return keyboard control to the main window after a button click.
+In basic mode, only the standard calculator buttons are visible. In programmer mode, additional buttons and controls appear, including number system selection, data type selection and the bit view.
 
-#### Graphics (GDI):
-- Create `HFONT` objects using `CreateFontW` only during `WM_SIZE` and clean them up with `DeleteObject`. Do not create GDI objects inside the `WM_PAINT` loop.
-- Use `SetTextColor`, `SetBkMode(..., TRANSPARENT)`, and `DrawTextW` with flags like `DT_RIGHT | DT_VCENTER` for text rendering.
-- Register your custom class with `CS_HREDRAW | CS_VREDRAW` styles to ensure it repaints correctly on resize.
+The application can be resized, and the controls are rearranged to fit the available window space. This makes the program more flexible than a fixed-size calculator window.
 
-## Home Task - WinAPI 3 - DevCalculator
+## Main Functionalities
 
-### 1. Introduction
-This task is a continuation of the laboratory assignment - you must first finish the lab part to continue. 
-You will extend the "Basic" calculator with a fully functional **Programmer Mode**, featuring bit manipulation, advanced data types, and persistent window settings.
-In all cases where the specification is not clear or a detail is missing, you should mimic the behavior of the provided example application, except for any potential bugs found within it.
+The calculator allows the user to:
 
----
+- perform basic arithmetic calculations,
+- use decimal, hexadecimal, octal and binary number systems,
+- switch between basic and programmer mode,
+- display the binary representation of the current value,
+- edit individual bits in programmer mode,
+- choose the numeric data type,
+- use keyboard shortcuts for faster input,
+- copy and paste numeric values,
+- clear the current input or remove the last digit,
+- keep the calculator window always on top,
+- save selected window settings between program runs.
 
-### 2. Requirements
+## Keyboard Support
 
-#### Programmer Mode & Advanced Data Types:
-- Implement a fully functional mode selectable via the menu or shortcuts (**Ctrl+1** for Basic, **Ctrl+2** for Programmer).
-- Support for multiple data types via a `COMBOBOX`:
-    - **Integers**: 8/16/32/64 bit (signed/unsigned).
-    - **Floating point (IEEE 754)**: Half (16-bit), Float (32-bit), Double (64-bit).
-- Support for display bases: **Hex, Dec, Oct, Bin** with appropriate prefixes (`0x`, `b`, `o`) and shortcuts (**Ctrl+H/D/O/B**).
-- Full support for Hexadecimal input (A-F keys and UI buttons).
+The application supports both mouse and keyboard input.  
+Numbers and operators can be typed directly from the keyboard. The Enter key works as the equals button, Escape clears the current input, and Backspace removes the last character.
 
-#### Interactive Bit Display (Custom GDI):
-- A second custom GDI control that visualizes the binary representation (up to 64 bits).
-- **Interactivity**: Allow users to toggle individual bits by clicking.
-- **Visual Feedback**:
-    - Add a hover effect for bits.
-    - Highlight components for floating-point types: **Sign bit** (Red), **Exponent** (Green), **Mantissa** (Blue).
-    - Use smart font scaling: if boxes become too narrow, scale the font size based on box width.
-- **Tooltips**: Display informative weighted hints (e.g., `Sign bit`, `Exponent: 2^N (Bias: X)`, `Mantissa: 2^-N`).
+This makes the calculator faster to use and closer to standard desktop calculator applications.
 
-#### Logic & Features:
-- **Exact Input**: Decimal input should preserve the raw string during typing to avoid immediate rounding.
-- **Precision Warning**: Display the actual stored value in red below the main input if the decimal value cannot be exactly represented by the chosen floating-point type.
-- **Productivity**: Support **Copy (Ctrl+C)** and **Paste (Ctrl+V)** for numeric values.
+## Settings
 
-#### Window Management & Persistence:
-- **Always on Top**: Toggleable top-most state.
-- **Translucency**: When "Always on Top" is active, make the window partially transparent (approx. 70% opacity) whenever it loses focus.
-- **Configuration Persistence**: Save and load window position, size, mode, data type, base, and view options in a `config.ini` file.
+The program saves selected settings to a configuration file. Thanks to this, some window options can be restored when the application is opened again.
 
----
-
-### 3. Scoring (12 pts)
-
-#### Programmer Logic & Data Types (3 pts)
-- **Robust Types**: Correct bit-level interpretation of all 11 types (Int/UInt 8-64, Half, Float, Double) with correct casting during type changes.
-- **Input Accuracy**: Precise string-based decimal input that matches hardware-level floating point representations.
-- **Mode Switching**: Seamless transition between Basic and Programmer modes with UI synchronization and functional shortcuts (**Ctrl+1/2**).
-
-#### Interactive Bit Display (4 pts)
-- **Core Interactivity**: Accurate bit toggling via mouse clicks, distinct hover effects, and flicker-free rendering using double buffering.
-- **Advanced Visuals**: Intelligent font scaling (width-aware) and clear color coding for floating-point components (Sign/Exp/Mant).
-- **Informative Tooltips**: Dynamic hints showing the specific mathematical contribution, bias, and weights of each bit.
-
-#### Formatting & User Experience (2 pts)
-- **Base Support**: Correct conversion and display for Hex, Oct, and Bin bases including standard prefixes and input filtering.
-- **Readability**: A red "Precision Warning" for floating-point approximations.
-- **Clipboard**: Reliable implementation of **Ctrl+C** and **Ctrl+V** for numeric values.
-
-#### Window Management & Persistence (3 pts)
-- **Window States**: Functional "Always on Top" mode with appropriate menu state tracking.
-- **Focus Effects**: Automatic transparency adjustment (translucency) when the window is inactive in Top-Most mode.
-- **Full Persistence**: Robust saving/loading of window position, size, and every UI setting in a `config.ini` file.
-
----
-
-### 4. Hints
-
-#### Graphics & Tooltips:
-- **Double Buffering**: To prevent flickering in custom controls, return `1` for `WM_ERASEBKGND` and perform all drawing on a memory DC created with `CreateCompatibleDC` and `CreateCompatibleBitmap`, then `BitBlt` to the screen.
-- **Manual Tooltips**: Use `TOOLTIPS_CLASS` with `TTF_TRACK` and `TTF_ABSOLUTE`. Manually manage position and visibility via `TTM_TRACKPOSITION` and `TTM_TRACKACTIVATE`.
-
-#### Window Features:
-- **Transparency**: Requires the `WS_EX_LAYERED` extended style. Use `SetLayeredWindowAttributes` with the `LWA_ALPHA` flag to control opacity.
-- **Persistence**: Use `WritePrivateProfileStringW` and `GetPrivateProfileIntW` to manage `.ini` configuration files.
+This includes options such as the selected mode, window size or always-on-top setting, depending on the current state of the application.
