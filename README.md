@@ -2,7 +2,7 @@
 
 DevCalculator is a desktop calculator application written in C++ using the WinAPI library.
 
-The program was created as a native Windows application, without using ready-made graphical frameworks. The window, buttons, menus, display area and user interactions are handled directly with WinAPI mechanisms.
+The project was created as part of a **Programming in Graphical Environment** course. It is a native Windows application built without ready-made graphical frameworks. The window, buttons, menus, display area and user interactions are handled directly with WinAPI mechanisms.
 
 The calculator has two modes: basic and programmer. Basic mode provides standard arithmetic operations, while programmer mode adds support for different number systems, numeric data types and bit representation.
 
