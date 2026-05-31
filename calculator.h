@@ -76,12 +76,12 @@ private:
 
 	HWND m_buttons[24]; //tablica uchwytow do przyciskow
 
-	std::wstring m_history_text;
-	std::wstring m_result_text;
+	std::wstring m_history_text; //tekst u gory
+	std::wstring m_result_text; //wynik
 
-	double m_stored_value;
-	wchar_t m_pending_operator;
-	bool m_start_new_input;
+	double m_stored_value; //lewy arg dzialania
+	wchar_t m_pending_operator; //operator oczekujacy na druga liczbe np +
+	bool m_start_new_input; 
 
 	CalcMode m_mode;
 	DataType m_data_type; 
@@ -93,7 +93,7 @@ private:
 
 	HWND m_base_combo;
 	NumberBase m_number_base;
-	std::wstring m_precision_warning;
+	std::wstring m_precision_warning; //ostrzezenie dla floatow
 
 	void populate_base_combo();
 	std::wstring format_value_by_base() const;
@@ -112,7 +112,7 @@ private:
 	bool is_zero_text_for_current_base() const;
 	void append_digit_to_result(wchar_t digit);
 
-	bool m_always_on_top;
+	bool m_always_on_top; //czy okno jest zawsze na wierzchu
 	bool m_window_active;
 	int m_window_x;
 	int m_window_y;

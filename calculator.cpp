@@ -8,7 +8,7 @@
 #include <limits>
 #include <cwctype>
 
-enum ButtonIds { //identyfikatory przyciskow
+enum ButtonIds { //identyfikatory przyciskow, zeby w WM_COMMANd dalo sie rozpoznac ktory przycisk zostal klinkiety
 	ID_BTN_7 = 2001,
 	ID_BTN_8,
 	ID_BTN_9,
@@ -39,7 +39,7 @@ std::wstring const calculator::s_class_name{ L"window" };
 std::wstring const calculator::s_display_class_name{ L"calculator_display" };
 std::wstring const calculator::s_bits_class_name{ L"calculator_bits" };
 
-struct DisplayState {
+struct DisplayState { //stan kontrolki
 	std::wstring history;
 	std::wstring result;
 	HFONT history_font;
@@ -96,7 +96,7 @@ HWND calculator::create_window()
 		m_instance,
 		this);
 }
-
+//tworzy gorny bialy panel z historia, wynikiem i warningiem
 void calculator::create_display(HWND parent) {
 	m_display = CreateWindowExW(
 		WS_EX_CLIENTEDGE,
@@ -116,7 +116,7 @@ void calculator::create_display(HWND parent) {
 	SetWindowLongPtrW(m_display, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
 }
 
-void calculator::create_buttons(HWND parent) {
+void calculator::create_buttons(HWND parent) { //tworzy przyciski kalkulatora
 	const wchar_t* labels[24] = {
 		L"A", L"B", L"C", L"D", L"E", L"F",
 		L"7", L"8", L"9", L"/",
@@ -406,7 +406,7 @@ LRESULT CALLBACK calculator::display_proc_static(HWND window, UINT message, WPAR
 
 LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam) {
 	switch (message) {
-	case WM_CREATE:
+	case WM_CREATE: 
 		m_main = window;
 		create_display(window);
 		create_programmer_controls(window);
@@ -421,7 +421,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		apply_topmost_state();
 		update_all_displays();
 		return 0;
-	case WM_SIZE:
+	case WM_SIZE: //przeliczanie rozmiaru dzieci
 	{
 		int width = LOWORD(lparam);
 		int height = HIWORD(lparam);
@@ -431,7 +431,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 	case WM_CLOSE:
 		DestroyWindow(window);
 		return 0;
-	case WM_DESTROY:
+	case WM_DESTROY: //zapisuje ustawienia i konczy program
 		save_settings();
 		if (window == m_main)
 			PostQuitMessage(EXIT_SUCCESS);
@@ -456,13 +456,13 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		}
 		break;
 	}
-	case WM_ACTIVATE:
+	case WM_ACTIVATE: //sprawdza czy okno jest aktywne i ustawianie przezroczystosci
 	{
 		m_window_active = (LOWORD(wparam) != WA_INACTIVE);
 		apply_inactive_transparency();
 		return 0;
 	}
-	case WM_COMMAND: //obsluga komend menu
+	case WM_COMMAND: //obsluga klikniecia przyciskow, menu
 	{
 		if (HIWORD(wparam) == CBN_SELCHANGE && LOWORD(wparam) == IDC_BASE_COMBO) {
 			int sel = static_cast<int>(SendMessageW(m_base_combo, CB_GETCURSEL, 0, 0));
@@ -766,7 +766,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 
 		return 0;
 	}
-	case WM_CHAR:
+	case WM_CHAR: //obsluguje wpisywanie znakow z klawiatury
 	{
 		wchar_t ch = (wchar_t)wparam;
 
@@ -821,7 +821,7 @@ LRESULT calculator::window_proc(HWND window, UINT message, WPARAM wparam, LPARAM
 		update_all_displays();
 		return 0;
 	}
-	case WM_KEYDOWN:
+	case WM_KEYDOWN: //obsluga klawiszy specjalnych
 	{
 		switch (wparam)
 		{;
