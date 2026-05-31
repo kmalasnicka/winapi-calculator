@@ -4,32 +4,23 @@ DevCalculator is a desktop calculator application written in C++ using the WinAP
 
 The program was created as a native Windows application, without using ready-made graphical frameworks. The window, buttons, menus, display area and user interactions are handled directly with WinAPI mechanisms.
 
-The application has two working modes: a standard calculator mode and a programmer mode. It allows the user to perform basic arithmetic operations, work with different number systems, view the bit representation of values and use the calculator with both mouse and keyboard.
+The calculator has two modes: basic and programmer. Basic mode provides standard arithmetic operations, while programmer mode adds support for different number systems, numeric data types and bit representation.
 
 ## Project Description
 
-The basic mode provides standard arithmetic operations, such as addition, subtraction, multiplication and division. The user can enter numbers, clear the current value, delete the last digit and display the result. The calculator also shows a simple operation history.
+In basic mode, the user can perform calculations, clear the current value, delete the last digit and view a simple operation history.
 
-The programmer mode extends the calculator with features useful for programming-related calculations. The user can switch between decimal, hexadecimal, octal and binary representation. The application also displays the bit representation of the current value and allows the user to edit individual bits.
+In programmer mode, the user can switch between decimal, hexadecimal, octal and binary representation. The application also displays the bit representation of the current value and allows editing individual bits.
 
-The calculator supports different numeric data types, which affects how values are represented in programmer mode.
-
-## User Interface
-
-The interface consists of a custom display area, calculator buttons, menu options and additional controls available in programmer mode.
-
-The display area is drawn manually using GDI and shows the current value and operation history. The calculator buttons are standard WinAPI controls, and their layout is adjusted when the window size changes.
-
-In basic mode, only standard calculator buttons are visible. In programmer mode, additional controls for number system selection, data type selection and bit view are shown.
+The display area is drawn manually using GDI. The rest of the interface is built with standard WinAPI controls and adjusts to the selected mode and window size.
 
 ## Main Functionalities
 
 - basic arithmetic calculations,
 - basic and programmer mode,
 - decimal, hexadecimal, octal and binary number systems,
-- bit representation display,
-- editing individual bits in programmer mode,
 - selectable numeric data type,
+- bit representation display and editing,
 - keyboard input support,
 - copy and paste support,
 - clearing input and deleting the last digit,
@@ -38,7 +29,7 @@ In basic mode, only standard calculator buttons are visible. In programmer mode,
 
 ## Keyboard Support
 
-The calculator supports mouse and keyboard input. Numbers and operators can be typed directly from the keyboard. Enter works as the equals button, Escape clears the input and Backspace removes the last character.
+Numbers and operators can be typed directly from the keyboard. Enter works as the equals button, Escape clears the input and Backspace removes the last character.
 
 ## Settings
 
